@@ -61,7 +61,8 @@ bool MDADegradeAudioProcessor::isBusesLayoutSupported(const BusesLayout &layouts
   return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
 }
 
-void MDADegradeAudioProcessor::resetState() {
+void MDADegradeAudioProcessor::resetState()
+{
   _accum = 0.0f;
   _currentSample = 0.0f;
   _buf1 = _buf2 = _buf3 = _buf4 = _buf6 = _buf7 = _buf8 = _buf9 = 0.0f;
@@ -92,7 +93,8 @@ float MDADegradeAudioProcessor::filterFreq(float hz)
   return (std::sqrt(k * k - 4.0f * j * j) - k) / (2.0f * j);
 }
 
-void MDADegradeAudioProcessor::update() {
+void MDADegradeAudioProcessor::update()
+{
   // The sample interval is a number between 1 and 10. If 1, we read from the
   // input buffer at the project's sample rate. If the interval is 2, we skip
   // every other sample, cutting the effective sample rate in half; and so on.
@@ -164,7 +166,7 @@ void MDADegradeAudioProcessor::update() {
   }
 }
 
-void MDADegradeAudioProcessor::processBlock (juce::AudioBuffer<float> &buffer, juce::MidiBuffer &midiMessages)
+void MDADegradeAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::MidiBuffer &midiMessages)
 {
   juce::ScopedNoDenormals noDenormals;
   auto totalNumInputChannels = getTotalNumInputChannels();
