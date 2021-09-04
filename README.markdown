@@ -26,15 +26,21 @@ This source code is licensed under the [MIT license](LICENSE.txt) but keep in mi
 
 ## Included plug-ins
 
-You can find the [original documentation here](http://mda.smartelectronix.com/vst/help/mdaplugs.htm) --- if you're not sure how to use a particular plug-in, check here first.
+You can find the [original documentation here](http://mda.smartelectronix.com/vst/help/mdaplugs.htm) — if you're not sure how to use a particular plug-in, check here first.
 
-### mda Degrade
+The plug-ins are ordered from simple to complicated. If you're new to audio programming, start at the top and work your way down the list.
 
-This plug-in reduces the bit-depth and sample rate of the input audio (using the Quantize and Sample Rate parameters) and has some other features for attaining the sound of vintage digital hardware.  The headroom control is a peak clipper, and the Non-Linearity controls add some harmonic distortion to thicken the sound.  Post Filter is a low-pass filter to remove some of the grit introduced by the other controls.
-
-### mda RingMod
+### RingMod
 
 This was the first "mda" effect, made way back in 1998.  It is a simple ring modulator, multiplying the input signal by a sine wave, the frequency of which is set using the Frequency and Fine Tune controls.  As if ring modulation wasn't harsh enough already, the Feedback parameter can add even more edge to the sound!
+
+### Overdrive
+
+Soft distortion
+
+### Degrade
+
+This plug-in reduces the bit-depth and sample rate of the input audio (using the Quantize and Sample Rate parameters) and has some other features for attaining the sound of vintage digital hardware.  The headroom control is a peak clipper, and the Non-Linearity controls add some harmonic distortion to thicken the sound.  Post Filter is a low-pass filter to remove some of the grit introduced by the other controls.
 
 ## Plug-ins that have not been converted yet
 
@@ -53,7 +59,6 @@ This was the first "mda" effect, made way back in 1998.  It is a simple ring mod
 - Limiter - Opto-electronic style limiter
 - Loudness - Equal loudness contours for bass EQ and mix correction 
 - Multiband - Multi-band compressor with M-S processing modes 
-- Overdrive - Soft distortion
 - Re-Psycho! - Drum loop pitch changer
 - RezFilter - Resonant filter with LFO and envelope follower
 - Round Panner - 3D panner
