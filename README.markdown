@@ -26,7 +26,7 @@ This source code is licensed under the [MIT license](LICENSE.txt) but keep in mi
 
 ## Included plug-ins
 
-You can find the [original documentation here](http://mda.smartelectronix.com/vst/help/mdaplugs.htm) — if you're not sure how to use a particular plug-in, check here first.
+You can find the [original documentation here](http://mda.smartelectronix.com/vst/help/mdaplugs.htm) — if you're not sure how to use a particular plug-in, check there first.
 
 The plug-ins are ordered from simple to complicated. If you're new to audio programming, start at the top and work your way down the list.
 
@@ -42,13 +42,16 @@ Soft distortion
 
 This plug-in reduces the bit-depth and sample rate of the input audio (using the Quantize and Sample Rate parameters) and has some other features for attaining the sound of vintage digital hardware.  The headroom control is a peak clipper, and the Non-Linearity controls add some harmonic distortion to thicken the sound.  Post Filter is a low-pass filter to remove some of the grit introduced by the other controls.
 
+### Delay
+
+Simple stereo delay with feedback tone control.
+
 ## Plug-ins that have not been converted yet
 
 - Bandisto - Multi-band distortion
 - BeatBox - Drum replacer 
 - Combo - Amp & speaker simulator
 - De-ess - High frequency dynamics processor
-- Delay - Simple stereo delay with feedback tone control
 - Detune - Simple up/down pitch shifting thickener
 - Dither - Range of dither types including noise shaping 
 - DubDelay - Delay with feedback saturation and time/pitch modulation
@@ -112,3 +115,11 @@ This is managed by an `atomic<bool>` variable. The PluginProcessor is a `ValueTr
 The second type of variable keeps track of rendering state. This is something like the current phase of an oscillator or the delay unit of a filter. These variables are given their initial value by `resetState()` and will be changed by `processBlock`.
 
 Inside `processBlock()` we first read the member variables into local variables (for state) or constants (for parameters). Then the processing loop uses these local variables instead of the member variables. If the audio processing loop updates any of the state (which it usually does), the latest values get copied back into the corresponding member variables after the loop. This is how the original plug-ins did it, and I kept the same approach.
+
+## TODO
+
+Possible issues:
+
+- Some of the original plug-ins displayed parameters using the current sample rate, for example to show a time in milliseconds rather than a meaningless "naked" parameter value. I did not implement this yet for the following reason: even though AudioParameterFloat can take a stringFromValue function that formats the parameter value for display, the sample rate is not accessible at the time we create the parameters (since that happens in a static function). And I don't think you can change the stringFromValue afterwards. So to solve this, we'd need to create the parameters differently. I'm also not sure if this is really worth it: pretty printing the parameters seems something that belongs to custom UIs, not to the generic sliders.
+
+- Investigate how useful it is to copy member variables into local variables in processBlock. I'm not sure it actually results in a speed gain, since both will be implemented as a load from a register using an offset. But maybe telling the compiler that certain values are considered const is still beneficial. Need to look into the generated assembly to make sure.
