@@ -49,6 +49,12 @@ private:
   void update();
   void resetState();
 
+  // Maps the position of the right delay slider to a percentage of the left
+  // channel delay time. Moving the slider to the left gives you a variable
+  // ratio between 0% and 200%. Moving the slider to the right chooses from a
+  // set of fixed ratios. At the center position, the ratio is 200%.
+  static float rightDelayRatio(float param);
+
   // Maximum delay time in milliseconds. Feel free to make this smaller or
   // larger. The original plug-in used a fixed number of samples, but that
   // would make the maximum delay time different if the sample rate changed.

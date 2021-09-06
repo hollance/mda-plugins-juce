@@ -99,25 +99,8 @@ void MDADelayAudioProcessor::update()
   if (_ldel > _delayMax) _ldel = _delayMax;
 
   // The right channel delay is a percentage of the left channel delay length.
-  // Moving the slider to the left gives you a variable ratio between 0% and
-  // 200%. Moving the slider to the right chooses from a set of fixed ratios.
-  // At the center position, the ratio is 200%. To give right the same delay
-  // as left, put the slider roughly on 0.75.
   float rdelParam = apvts.getRawParameterValue("R Delay")->load();
-  float tmp;
-  switch (int(rdelParam * 17.9f)) {          // fixed left/right ratios
-    case 17: tmp = 0.5000f; break;
-    case 16: tmp = 0.6667f; break;
-    case 15: tmp = 0.7500f; break;
-    case 14: tmp = 0.8333f; break;
-    case 13: tmp = 1.0000f; break;
-    case 12: tmp = 1.2000f; break;
-    case 11: tmp = 1.3333f; break;
-    case 10: tmp = 1.5000f; break;
-    case  9: tmp = 2.0000f; break;
-    default: tmp = 4.0f * rdelParam; break;  // variable ratio (param < 0.5)
-  }
-  _rdel = int(ldelParam * samplesPerMsec * tmp);
+  _rdel = int(ldelParam * samplesPerMsec * rightDelayRatio(rdelParam));
 
   // Make sure the delay time does not become too large or too small.
   if (_rdel > _delayMax) _rdel = _delayMax;
@@ -306,6 +289,21 @@ void MDADelayAudioProcessor::setStateInformation(const void *data, int sizeInByt
   }
 }
 
+float MDADelayAudioProcessor::rightDelayRatio(float param) {
+  switch (int(param * 17.9f)) {
+    case 17: return 0.5000f;       // fixed left/right ratios
+    case 16: return 0.6667f;
+    case 15: return 0.7500f;
+    case 14: return 0.8333f;
+    case 13: return 1.0000f;
+    case 12: return 1.2000f;
+    case 11: return 1.3333f;
+    case 10: return 1.5000f;
+    case  9: return 2.0000f;
+    default: return 4.0f * param;  // variable ratio (param < 0.5)
+  }
+}
+
 juce::AudioProcessorValueTreeState::ParameterLayout MDADelayAudioProcessor::createParameterLayout()
 {
   juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -317,19 +315,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout MDADelayAudioProcessor::crea
     250.0f,
     "ms"));
 
-  // The original plug-in displays the right channel delay time as a percentage
-  // of the left channel delay time. Moving the slider to the left gives you a
-  // variable ratio, to the right gives a choice between several fixed ratios.
-  // Here, we just use a parameter from 0 - 1 where 0.5 means 200% and dragging
-  // the slider to the left or the right makes this percentage smaller (but in
-  // different ways). It's hard to see in the generic UI exactly what happens
-  // here, so a custom UI would be helpful for this parameter.
-
   layout.add(std::make_unique<juce::AudioParameterFloat>(
     "R Delay",
     "R Delay",
     juce::NormalisableRange<float>(0.0f, 1.0f),
-    0.27f));
+    0.27f,
+    "%",
+    juce::AudioProcessorParameter::genericParameter,
+    [](float value, int) { return juce::String(rightDelayRatio(value) * 100.0f, 1); }));
 
   layout.add(std::make_unique<juce::AudioParameterFloat>(
     "Feedback",
