@@ -315,6 +315,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout MDADelayAudioProcessor::crea
     250.0f,
     "ms"));
 
+  // The right channel delay time is expressed as a percentage of the left
+  // channel delay time, allowing you to make the delay appear earlier or later
+  // on the right than on the left. However, the parameter itself is a little
+  // tricky. The parameter value goes between 0 and 1. Moving the slider to the
+  // left (parameter between 0 and 0.5) makes the right channel delay between
+  // 0% and 200% of the left channel delay. Moving the slider to the right
+  // (parameter between 0.5 and 1) will choose from a set of fixed left:right
+  // ratios. To make this clearer to the user, we don't display the parameter
+  // value but the actual percentage that has been chosen.
+
   layout.add(std::make_unique<juce::AudioParameterFloat>(
     "R Delay",
     "R Delay",
