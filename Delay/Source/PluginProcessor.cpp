@@ -43,10 +43,10 @@ void MDADelayAudioProcessor::changeProgramName(int index, const juce::String &ne
 
 void MDADelayAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-  // The maximum delay time is half a second. Feel free to make this smaller
-  // or larger. The original plug-in used a fixed number of samples, but that
-  // would make the maximum delay time different if the sample rate changed.
-  _delayMax = int(std::ceil(sampleRate * 0.5));
+  // Calculate how many samples we need for the delay buffer. This depends on
+  // the sample rate and the maximum allowed delay time: the larger the sample
+  // rate, the larger the buffer must be.
+  _delayMax = int(std::ceil(float(sampleRate) * _delayMaxMsec / 1000.0f));
   _delayBuffer.resize(_delayMax);
 
   resetState();
@@ -76,20 +76,27 @@ void MDADelayAudioProcessor::resetState()
 
 void MDADelayAudioProcessor::update()
 {
-  // The delay length should be between 0 and _delayMax samples. The parameter
-  // goes from 0 - 1. To calculate the actual delay length, the parameter value
-  // is squared. This makes it easier to pick smaller delay sizes. For example,
-  // at a sample rate of 44100, the maximum delay length is 22050 samples. With
-  // the parameter set to 0.5, the delay is not 11025 (= half) but 5512 samples
-  // (= half squared). This is similar to setting a skew factor on the slider.
+  const float samplesPerMsec = float(getSampleRate()) / 1000.0f;
+
+  // In the original plug-in, the parameter for the left channel delay length
+  // went from 0 to 1. To compute the number of samples of delay, the following
+  // formula was used: ldel = int(delayMax * ldelParam * ldelParam). The reason
+  // the parameter gets squared, is that this makes it easier to pick smaller
+  // delays. For example, at a sample rate of 44100, the maximum delay length
+  // is 22050 samples. With the parameter set to 0.5, the delay is not 11025
+  // (= half) but 5512 samples (= half squared). In JUCE, we can simply have
+  // the parameter be in milliseconds and give the slider a skew factor.
   float ldelParam = apvts.getRawParameterValue("L Delay")->load();
-  _ldel = int(_delayMax * ldelParam * ldelParam);
+  _ldel = int(ldelParam * samplesPerMsec);
 
   // Actually make the minimum delay time 4 samples, not 0. A delay time of 0
   // would be equal to the maximum delay because of wrap-around, so that's not
   // very useful. Although I'm not sure why the minimum delay is 4 samples and
   // not 1. Notice that really short delays introduce a filtering effect.
   if (_ldel < 4) _ldel = 4;
+
+  // This shouldn't happen, but a bit of defensive programming never hurts.
+  if (_ldel > _delayMax) _ldel = _delayMax;
 
   // The right channel delay is a percentage of the left channel delay length.
   // Moving the slider to the left gives you a variable ratio between 0% and
@@ -110,7 +117,7 @@ void MDADelayAudioProcessor::update()
     case  9: tmp = 2.0000f; break;
     default: tmp = 4.0f * rdelParam; break;  // variable ratio (param < 0.5)
   }
-  _rdel = int(_delayMax * ldelParam * ldelParam * tmp);
+  _rdel = int(ldelParam * samplesPerMsec * tmp);
 
   // Make sure the delay time does not become too large or too small.
   if (_rdel > _delayMax) _rdel = _delayMax;
@@ -142,7 +149,7 @@ void MDADelayAudioProcessor::update()
 
   // The filter itself is a one-pole filter: y(n) = (1 - f)*x(n) + f*y(n - 1).
   // Calculate the coefficient f using the formula exp(-2pi * hz / sampleRate).
-  _filt = std::exp(-6.2831853f * hz / (float)getSampleRate());
+  _filt = std::exp(-6.2831853f * hz / float(getSampleRate()));
 
   // Feedback: value between 0 and 0.49. If this is 0, the delay repeats only
   // once. For higher values, the delay will keeping echoing.
@@ -303,25 +310,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout MDADelayAudioProcessor::crea
 {
   juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
-  // The original plug-in displays the left channel delay time in milliseconds.
-  // To calculate that, we need access to the project's sample rate, which we
-  // don't have in this static function. Here we simply use the naked parameter
-  // value from 0.0 to 1.0, where 0 means no delay and 1 means maximum delay.
-  // Showing the delay in milliseconds is nicer for the user, but that requires
-  // making a custom UI.
-
   layout.add(std::make_unique<juce::AudioParameterFloat>(
     "L Delay",
     "L Delay",
-    juce::NormalisableRange<float>(0.0f, 1.0f),
-    0.5f));
+    juce::NormalisableRange<float>(0.1f, _delayMaxMsec, 0.01f, 0.4f),
+    250.0f,
+    "ms"));
 
   // The original plug-in displays the right channel delay time as a percentage
   // of the left channel delay time. Moving the slider to the left gives you a
   // variable ratio, to the right gives a choice between several fixed ratios.
   // Here, we just use a parameter from 0 - 1 where 0.5 means 200% and dragging
   // the slider to the left or the right makes this percentage smaller (but in
-  // different ways).
+  // different ways). It's hard to see in the generic UI exactly what happens
+  // here, so a custom UI would be helpful for this parameter.
 
   layout.add(std::make_unique<juce::AudioParameterFloat>(
     "R Delay",

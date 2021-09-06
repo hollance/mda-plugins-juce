@@ -49,6 +49,11 @@ private:
   void update();
   void resetState();
 
+  // Maximum delay time in milliseconds. Feel free to make this smaller or
+  // larger. The original plug-in used a fixed number of samples, but that
+  // would make the maximum delay time different if the sample rate changed.
+  static constexpr float _delayMaxMsec = 500.0f;
+
   // Maximum length of the delay buffer in samples.
   int _delayMax;
 
