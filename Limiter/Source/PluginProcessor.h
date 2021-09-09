@@ -3,7 +3,8 @@
 #include <JuceHeader.h>
 
 class MDALimiterAudioProcessor : public juce::AudioProcessor,
-                                 private juce::ValueTree::Listener {
+                                 private juce::ValueTree::Listener
+{
 public:
   MDALimiterAudioProcessor();
   ~MDALimiterAudioProcessor() override;

@@ -3,7 +3,8 @@
 #include <JuceHeader.h>
 
 class MDADegradeAudioProcessor : public juce::AudioProcessor,
-                                 private juce::ValueTree::Listener {
+                                 private juce::ValueTree::Listener
+{
 public:
   MDADegradeAudioProcessor();
   ~MDADegradeAudioProcessor() override;

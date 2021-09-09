@@ -3,7 +3,8 @@
 #include <JuceHeader.h>
 
 class MDADelayAudioProcessor : public juce::AudioProcessor,
-                               private juce::ValueTree::Listener {
+                               private juce::ValueTree::Listener
+{
 public:
   MDADelayAudioProcessor();
   ~MDADelayAudioProcessor() override;
