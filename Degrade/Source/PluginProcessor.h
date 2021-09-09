@@ -39,9 +39,10 @@ public:
   juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
 
 private:
-  static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override {
+  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override
+  {
     _parametersChanged.store(true);
   }
 

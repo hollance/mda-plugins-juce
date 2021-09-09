@@ -192,6 +192,4 @@ Remember that squaring was only done to make the slider work more logarithmicall
 
 Possible issues:
 
-- Some of the original plug-ins displayed parameters using the current sample rate, for example to show a time in milliseconds rather than a meaningless "naked" parameter value. I did not implement this yet for the following reason: even though AudioParameterFloat can take a stringFromValue function that formats the parameter value for display, the sample rate is not accessible at the time we create the parameters (since that happens in a static function). And I don't think you can change the stringFromValue afterwards. So to solve this, we'd need to create the parameters differently. I'm also not sure if this is really worth it: pretty printing the parameters seems something that belongs to custom UIs, not to the generic sliders.
-
 - Investigate how useful it is to copy member variables into local variables in processBlock. I'm not sure it actually results in a speed gain, since both will be implemented as a load from a register using an offset. But maybe telling the compiler that certain values are considered const is still beneficial. Need to look into the generated assembly to make sure.
