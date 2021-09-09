@@ -18,7 +18,6 @@ Some notes:
 
 - The code has been cleaned up a bit and documented, and occasionally bug fixed.
 - These plug-ins have no UI and use the default generic JUCE UI.
-- The MDA plug-ins were VST2, meaning that the parameters are always 0 - 1. Since JUCE allows us to have parameters in any range, they were changed to whatever felt more more natural (in dB, Hz, etc).
 - I'm not using the JUCE coding style because it's ugly. ;-)
 - The code has only been tested with Xcode on a Mac using JUCE 6.1, but should work on Windows too.
 
@@ -46,6 +45,10 @@ This plug-in reduces the bit-depth and sample rate of the input audio (using the
 
 Simple stereo delay with feedback tone control.
 
+### Limiter
+
+Opto-electronic style limiter.
+
 ## Plug-ins that have not been converted yet
 
 - Bandisto - Multi-band distortion
@@ -59,7 +62,6 @@ Simple stereo delay with feedback tone control.
 - Envelope - Envelope follower / VCA
 - Image - Stereo image adjustment and M-S matrix
 - Leslie - Rotary speaker simulator
-- Limiter - Opto-electronic style limiter
 - Loudness - Equal loudness contours for bass EQ and mix correction 
 - Multiband - Multi-band compressor with M-S processing modes 
 - Re-Psycho! - Drum loop pitch changer
@@ -115,6 +117,76 @@ This is managed by an `atomic<bool>` variable. The PluginProcessor is a `ValueTr
 The second type of variable keeps track of rendering state. This is something like the current phase of an oscillator or the delay unit of a filter. These variables are given their initial value by `resetState()` and will be changed by `processBlock`.
 
 Inside `processBlock()` we first read the member variables into local variables (for state) or constants (for parameters). Then the processing loop uses these local variables instead of the member variables. If the audio processing loop updates any of the state (which it usually does), the latest values get copied back into the corresponding member variables after the loop. This is how the original plug-ins did it, and I kept the same approach.
+
+## Conversion notes
+
+The MDA plug-ins were VST2, meaning that the parameters are always 0 - 1. Since JUCE allows us to have parameters in any range, they were changed to whatever felt more more natural (in dB, Hz, etc).
+
+Let's say the plug-in defines an Output Level parameter. Like all VST2 parameters, this has a range of 0 - 1. But in the UI we want to display this as decibels. The `getParameterDisplay()` function converts this 0 - 1 into a decibel value:
+
+```c++
+int2strng((VstInt32)(40.0 * fParam - 20.0), text);
+```
+
+Here, `fParam` is the 0 - 1 value. So this will show a range of -20 dB (when `fParam = 0`) to +20 dB (when `fParam = 1`). Note that this `getParameterDisplay()` function is only used for drawing the UI, not for anything else.
+
+In the audio processing code, the parameter is still 0 - 1. This value, which represents a range of decibels, is converted into a linear gain so that we can multiply it with the audio.
+
+```c+++
+g3 = (float)(pow(10.0, 2.0 * fParam - 1.0));
+```
+
+You may be wondering where this formula comes from. To go from decibels to a linear value, we do `pow(10, dB / 20)`. That is similar to what happens here, but not exactly the same. That's because our parameter isn't in decibels, it's 0 - 1. We first need to convert it to decibels:
+
+```c++
+  pow(10, dB / 20)
+= pow(10, (40 * fParam - 20) / 20)
+= pow(10, (40 * fParam / 20) - (20 / 20))
+= pow(10, 2 * fParam - 1)
+```
+
+And that is indeed the formula the original plug-in used.
+
+Fortunately, we don't need to do any of this. In the JUCE implementation, we can simply define the parameter to go from -20 to +20 dB. And then the `update()` function does:
+
+```c++
+float outputLevel = apvts.getRawParameterValue("Output")->load();  // -20 to +20 dB
+g3 = juce::Decibels::decibelsToGain(outputLevel);
+```
+
+We can let JUCE handle the math, and we get to work with parameters that have a more natural range than 0 - 1.
+
+However, sometimes it's a little more tricky. In the MDA Delay plug-in, the delay time in samples was calculated using the formula:
+
+```c++
+ldel = (VstInt32)(size * fParam0 * fParam0);
+```
+
+Here, `size` is the maximum length of the delay buffer in samples, and `fParam0` is a value between 0 and 1 as usual. Notice that `fParam0` gets squared, I'll explain why shortly.
+
+The `getParameterDisplay()` for this parameter was defined as:
+
+```c++
+int2strng((VstInt32)(ldel * 1000.0f / getSampleRate()), text);
+```
+
+Rather than deriving this from `fParam0` directly, it takes the computed delay in samples `ldel`, and converts it to a time in milliseconds that is shown to the user.
+
+In the JUCE version, I replaced this by a parameter that lets you directly choose the delay time in milliseconds, which seemed like a simpler approach. Instead of going from 0 - 1, the parameter goes to 0 to 500 ms. Makes sense, right?
+
+However, recall that the audio processing logic squares the parameter value in the formula `size * fParam0 * fParam0`. Since that parameter goes from 0 - 1, this creates a nice little x^2 curve. I think this was done to make it easier to pick smaller delays. For example, at a sample rate of 44100, the maximum delay length is 22050 samples. With the parameter set to 0.5, the delay is not 11025 (= half) but 5512 samples (= half squared). It makes the slider non-linear, which is usually what you want for times and frequencies.
+
+But we are not working with a normalized value from 0 - 1 anymore, our parameter is in milliseconds already. Squaring that number doesn't make any sense. We also can't solve this by dividing the chosen time by the maximum delay time to normalize it, and then squaring that number. Our slider for the delay time is linear and squaring the normalized value would actually give a different delay than the slider shows.
+
+The correct solution is to calculate the delay time linearly, without squaring the parameter:
+
+```c++
+const float samplesPerMsec = float(getSampleRate()) / 1000.0f;
+float ldelParam = apvts.getRawParameterValue("L Delay")->load();  // 0 - 500 ms
+ldel = int(ldelParam * samplesPerMsec);
+```
+
+Remember that squaring was only done to make the slider work more logarithmically, giving more room to smaller delays than to larger delays. In JUCE, we can achieve this by giving the slider a skew factor. Now our slider is non-linear too, just like in the original plug-in. But we don't have to do any of the math for it ourselves --- JUCE takes care of this for us.
 
 ## TODO
 
