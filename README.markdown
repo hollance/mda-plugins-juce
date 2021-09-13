@@ -10,7 +10,7 @@ These source examples are provided mainly for **learning purposes**! As Paul sai
 
 > This code is definitely not an example of how to write plug-ins! It's obvious that I didn't know much C++ when I started, and some of the optimizations might have worked on a 486 processor but are not relevant today.  The code is very raw with no niceties like parameter de-zipping, but maybe you'll find some useful stuff in there.  
 
-I've tried to fix some of these issues but did not add any new features such as the parameter dezipping. The code here is 20 years old, so it may no longer be the most optimal way to implement these algorithms. 
+I've tried to fix some of these issues but did not add any new features such as the parameter dezipping. The code here is 20 years old, so it may no longer be the most optimal way to implement these algorithms. Consider this project to be a kind of plug-in archeology. ;-)
 
 That said, it's still **a good place to get started** if you're learning about audio DSP, which is why I added lots of comments to describe what's going on. If you have a [basic understanding of JUCE](https://www.youtube.com/c/TheAudioProgrammer), you should be able to follow along. (See below for tips on getting started.)
 
@@ -49,6 +49,12 @@ Simple stereo delay with feedback tone control.
 
 Opto-electronic style limiter.
 
+### TestTone
+
+Signal generator with pink and white noise, impulses and sweeps.
+
+Note: the AU version of this plug-in has a bunch of extra features and improvements that I didn't convert yet.
+
 ## Plug-ins that have not been converted yet
 
 - Bandisto - Multi-band distortion
@@ -72,7 +78,6 @@ Opto-electronic style limiter.
 - Stereo Simulator - Haas delay and comb filtering
 - Sub-Bass Synthesizer - Several low frequency enhancement methods
 - Talkbox - High resolution vocoder
-- TestTone - Signal generator with pink and white noise, impulses and sweeps
 - Thru-Zero Flanger - Classic tape-flanging simulation
 - Tracker - Pitch tracking oscillator, or pitch tracking EQ
 - Vocoder - Switchable 8 or 16 band vocoder
@@ -193,3 +198,5 @@ Remember that squaring was only done to make the slider work more logarithmicall
 Possible issues:
 
 - Investigate how useful it is to copy member variables into local variables in processBlock. I'm not sure it actually results in a speed gain, since both will be implemented as a load from a register using an offset. But maybe telling the compiler that certain values are considered const is still beneficial. Need to look into the generated assembly to make sure.
+
+- TestTone: The meaning and/or value of certain parameters depends on other parameters. For example, F1 and F2 change depending on the mode setting. Currently, the UI does not automatically update to reflect this. Need to investigate how to best handle this in JUCE (does it have a concept of dependent parameters? or maybe just triggering a repaint of the UI is enough?).
