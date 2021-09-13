@@ -198,5 +198,3 @@ Remember that squaring was only done to make the slider work more logarithmicall
 Possible issues:
 
 - Investigate how useful it is to copy member variables into local variables in processBlock. I'm not sure it actually results in a speed gain, since both will be implemented as a load from a register using an offset. But maybe telling the compiler that certain values are considered const is still beneficial. Need to look into the generated assembly to make sure.
-
-- TestTone: The meaning and/or value of certain parameters depends on other parameters. For example, F1 and F2 change depending on the mode setting. Currently, the UI does not automatically update to reflect this. Need to investigate how to best handle this in JUCE (does it have a concept of dependent parameters? or maybe just triggering a repaint of the UI is enough?).

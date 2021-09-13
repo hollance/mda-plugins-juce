@@ -3,7 +3,8 @@
 #include <JuceHeader.h>
 
 class MDATestToneAudioProcessor : public juce::AudioProcessor,
-                                  private juce::ValueTree::Listener
+                                  private juce::ValueTree::Listener,
+                                  private juce::AudioProcessorValueTreeState::Listener
 {
 public:
   MDATestToneAudioProcessor();
@@ -47,6 +48,32 @@ private:
   }
 
   std::atomic<bool> _parametersChanged { false };
+
+  void parameterChanged(const juce::String &identifier, float value) override {
+    // The following code triggers the UI to redraw F1 and F2 when the mode
+    // changes, and the output level when the calibration setting changes.
+    // Note that this doesn't work in AudioPluginHost's "Show all parameters"
+    // but it does work with "Show plugin GUI". Not sure if this is the best
+    // way to handle it in JUCE, but it seems to work. :-)
+
+    if (identifier == "Mode") {
+      auto f1Param = apvts.getParameter("F1");
+      f1Param->beginChangeGesture();
+      f1Param->setValueNotifyingHost(f1Param->getValue());
+      f1Param->endChangeGesture();
+
+      auto f2Param = apvts.getParameter("F2");
+      f2Param->beginChangeGesture();
+      f2Param->setValueNotifyingHost(f2Param->getValue());
+      f2Param->endChangeGesture();
+    }
+    else if (identifier == "0dB =") {
+      auto param = apvts.getParameter("Level");
+      param->beginChangeGesture();
+      param->setValueNotifyingHost(param->getValue());
+      param->endChangeGesture();
+    }
+  }
 
   void update();
   void resetState();

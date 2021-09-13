@@ -8,10 +8,14 @@ MDATestToneAudioProcessor::MDATestToneAudioProcessor()
                    .withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
   apvts.state.addListener(this);
+  apvts.addParameterListener("Mode", this);
+  apvts.addParameterListener("0dB =", this);
 }
 
 MDATestToneAudioProcessor::~MDATestToneAudioProcessor()
 {
+  apvts.removeParameterListener("Mode", this);
+  apvts.removeParameterListener("0dB =", this);
   apvts.state.removeListener(this);
 }
 
