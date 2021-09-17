@@ -45,15 +45,19 @@ This plug-in reduces the bit-depth and sample rate of the input audio (using the
 
 Simple stereo delay with feedback tone control.
 
-### Limiter
-
-Opto-electronic style limiter.
-
 ### TestTone
 
 Signal generator with pink and white noise, impulses and sweeps.
 
 Note: the AU version of this plug-in has a bunch of extra features and improvements that I didn't convert yet.
+
+### SubSynth
+
+Sub-Bass Synthesizer: Several low frequency enhancement methods.
+
+### Limiter
+
+Opto-electronic style limiter.
 
 ## Plug-ins that have not been converted yet
 
@@ -76,7 +80,6 @@ Note: the AU version of this plug-in has a bunch of extra features and improveme
 - Shepard - Continuously rising/falling tone generator
 - Splitter - Frequency / level crossover for setting up dynamic processing
 - Stereo Simulator - Haas delay and comb filtering
-- Sub-Bass Synthesizer - Several low frequency enhancement methods
 - Talkbox - High resolution vocoder
 - Thru-Zero Flanger - Classic tape-flanging simulation
 - Tracker - Pitch tracking oscillator, or pitch tracking EQ
