@@ -59,6 +59,10 @@ Sub-Bass Synthesizer: Several low frequency enhancement methods.
 
 Opto-electronic style limiter.
 
+### Stereo
+
+Stereo Simulator: Add artificial width to a mono signal. Haas delay and comb filtering.
+
 ## Plug-ins that have not been converted yet
 
 - Bandisto - Multi-band distortion
@@ -79,7 +83,6 @@ Opto-electronic style limiter.
 - Round Panner - 3D panner
 - Shepard - Continuously rising/falling tone generator
 - Splitter - Frequency / level crossover for setting up dynamic processing
-- Stereo Simulator - Haas delay and comb filtering
 - Talkbox - High resolution vocoder
 - Thru-Zero Flanger - Classic tape-flanging simulation
 - Tracker - Pitch tracking oscillator, or pitch tracking EQ

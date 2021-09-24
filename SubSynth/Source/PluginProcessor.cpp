@@ -43,7 +43,7 @@ void MDASubSynthAudioProcessor::changeProgramName(int index, const juce::String 
 
 void MDASubSynthAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-  // Store this in a variable so we can use it in the UI.
+  // Store this in a variable so we can use it to format the parameters.
   _sampleRate = sampleRate;
 
   resetState();

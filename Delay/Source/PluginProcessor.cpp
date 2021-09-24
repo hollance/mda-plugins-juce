@@ -69,9 +69,11 @@ bool MDADelayAudioProcessor::isBusesLayoutSupported(const BusesLayout &layouts) 
 
 void MDADelayAudioProcessor::resetState()
 {
-  memset(_delayBuffer.data(), 0, _delayMax * sizeof(float));
   _pos = 0;
   _filt0 = 0.0f;
+
+  // Clear out the delay buffer.
+  memset(_delayBuffer.data(), 0, _delayMax * sizeof(float));
 }
 
 void MDADelayAudioProcessor::update()
