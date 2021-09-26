@@ -33,17 +33,25 @@ The plug-ins are ordered from simple to complicated. If you're new to audio prog
 
 This was the first "mda" effect, made way back in 1998.  It is a simple ring modulator, multiplying the input signal by a sine wave, the frequency of which is set using the Frequency and Fine Tune controls.  As if ring modulation wasn't harsh enough already, the Feedback parameter can add even more edge to the sound!
 
+[Docs](http://mda.smartelectronix.com/vst/help/ringmod.htm)
+
 ### Overdrive
 
 Soft distortion
+
+[Docs](http://mda.smartelectronix.com/vst/help/overdrive.htm)
 
 ### Degrade
 
 This plug-in reduces the bit-depth and sample rate of the input audio (using the Quantize and Sample Rate parameters) and has some other features for attaining the sound of vintage digital hardware.  The headroom control is a peak clipper, and the Non-Linearity controls add some harmonic distortion to thicken the sound.  Post Filter is a low-pass filter to remove some of the grit introduced by the other controls.
 
+[Docs](http://mda.smartelectronix.com/vst/help/degrade.htm)
+
 ### Delay
 
 Simple stereo delay with feedback tone control.
+
+[Docs](http://mda.smartelectronix.com/vst/help/delay.htm)
 
 ### TestTone
 
@@ -51,17 +59,31 @@ Signal generator with pink and white noise, impulses and sweeps.
 
 Note: the AU version of this plug-in has a bunch of extra features and improvements that I didn't convert yet.
 
+[Docs](http://mda.smartelectronix.com/vst/help/testtone.htm)
+
 ### SubSynth
 
 Sub-Bass Synthesizer: Several low frequency enhancement methods.
+
+[Docs](http://mda.smartelectronix.com/vst/help/subsynth.htm)
 
 ### Limiter
 
 Opto-electronic style limiter.
 
+[Docs](http://mda.smartelectronix.com/vst/help/limiter.htm)
+
 ### Stereo
 
 Stereo Simulator: Add artificial width to a mono signal. Haas delay and comb filtering.
+
+[Docs](http://mda.smartelectronix.com/vst/help/stereo.htm)
+
+### Piano
+
+Acoustic piano instrument — this was quite a [popular free piano synth](https://www.kvraudio.com/product/piano-by-mda) back in the day.
+
+[Docs](http://mda.smartelectronix.com/vst/help/piano.htm)
 
 ## Plug-ins that have not been converted yet
 
