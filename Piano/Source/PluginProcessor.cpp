@@ -42,10 +42,7 @@ MDAPianoAudioProcessor::MDAPianoAudioProcessor()
   _delayMax = 0x7F;
 
   createPrograms();
-  _currentProgram = 0;
-
-  // TODO: to load the settings into the parameter objects
-  //setProgram(0);
+  setCurrentProgram(0);
 
   _waves = pianoData;
 
@@ -91,16 +88,26 @@ int MDAPianoAudioProcessor::getCurrentProgram()
 
 void MDAPianoAudioProcessor::setCurrentProgram(int index)
 {
-  printf("%d %f\n", index, _programs[index].param[0]);
-
   _currentProgram = index;
 
-  // TODO: I guess this should set the parameters?
-  // TODO: AudioPluginHost passes in the wrong index???
-  //update();
+  const char *paramNames[] = {
+    "Envelope Decay",
+    "Envelope Release",
+    "Hardness Offset",
+    "Velocity to Hardness",
+    "Muffling Filter",
+    "Velocity to Muffling",
+    "Velocity Sensitivity",
+    "Stereo Width",
+    "Polyphony",
+    "Fine Tuning",
+    "Random Detuning",
+    "Stretch Tuning",
+  };
 
-  auto param = apvts.getParameter("Envelope Decay");
-  param->setValueNotifyingHost(_programs[index].param[0]);
+  for (int i = 0; i < NPARAMS; ++i) {
+    apvts.getParameter(paramNames[i])->setValueNotifyingHost(_programs[index].param[i]);
+  }
 }
 
 const juce::String MDAPianoAudioProcessor::getProgramName(int index)
@@ -110,7 +117,7 @@ const juce::String MDAPianoAudioProcessor::getProgramName(int index)
 
 void MDAPianoAudioProcessor::changeProgramName(int index, const juce::String &newName)
 {
-  // TODO
+  // not implemented
 }
 
 void MDAPianoAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -326,10 +333,9 @@ void MDAPianoAudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
         break;
 
       // Program change
-//TODO: how do I cleanly do this in JUCE?
-//      case 0xC0:
-//        if (data1 < NPROGS) setProgram(data1);
-//        break;
+      case 0xC0:
+        if (data1 < NPROGS) setCurrentProgram(data1);
+        break;
 
       default: break;
     }
