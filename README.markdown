@@ -27,19 +27,12 @@ This source code is licensed under the [MIT license](LICENSE.txt) but keep in mi
 
 You can find the [original documentation here](http://mda.smartelectronix.com/vst/help/mdaplugs.htm) — if you're not sure how to use a particular plug-in, check there first.
 
-The plug-ins are ordered from simple to complicated. If you're new to audio programming, start at the top and work your way down the list.
+If you're new to audio programming and want to learn how these plug-ins work, start with one of the following:
 
-### RingMod
-
-This was the first "mda" effect, made way back in 1998.  It is a simple ring modulator, multiplying the input signal by a sine wave, the frequency of which is set using the Frequency and Fine Tune controls.  As if ring modulation wasn't harsh enough already, the Feedback parameter can add even more edge to the sound!
-
-[Docs](http://mda.smartelectronix.com/vst/help/ringmod.htm)
-
-### Overdrive
-
-Soft distortion
-
-[Docs](http://mda.smartelectronix.com/vst/help/overdrive.htm)
+- RingMod
+- Overdrive
+- Degrade
+- Delay
 
 ### Degrade
 
@@ -49,41 +42,49 @@ This plug-in reduces the bit-depth and sample rate of the input audio (using the
 
 ### Delay
 
-Simple stereo delay with feedback tone control.
-
-[Docs](http://mda.smartelectronix.com/vst/help/delay.htm)
-
-### TestTone
-
-Signal generator with pink and white noise, impulses and sweeps.
-
-Note: the AU version of this plug-in has a bunch of extra features and improvements that I didn't convert yet.
-
-[Docs](http://mda.smartelectronix.com/vst/help/testtone.htm)
-
-### SubSynth
-
-Sub-Bass Synthesizer: Several low frequency enhancement methods.
-
-[Docs](http://mda.smartelectronix.com/vst/help/subsynth.htm)
+Simple stereo delay with feedback tone control. [Docs](http://mda.smartelectronix.com/vst/help/delay.htm)
 
 ### Limiter
 
-Opto-electronic style limiter.
+Opto-electronic style limiter. [Docs](http://mda.smartelectronix.com/vst/help/limiter.htm)
 
-[Docs](http://mda.smartelectronix.com/vst/help/limiter.htm)
+### Overdrive
 
-### Stereo
-
-Stereo Simulator: Add artificial width to a mono signal. Haas delay and comb filtering.
-
-[Docs](http://mda.smartelectronix.com/vst/help/stereo.htm)
+Soft distortion plug-in. [Docs](http://mda.smartelectronix.com/vst/help/overdrive.htm)
 
 ### Piano
 
-Acoustic piano instrument — this was quite a [popular free piano synth](https://www.kvraudio.com/product/piano-by-mda) back in the day.
+Acoustic piano instrument — this was quite a [popular free piano synth](https://www.kvraudio.com/product/piano-by-mda) back in the day. [Docs](http://mda.smartelectronix.com/vst/help/piano.htm)
 
-[Docs](http://mda.smartelectronix.com/vst/help/piano.htm)
+### RingMod
+
+This was the first "mda" effect, made way back in 1998.  It is a simple ring modulator, multiplying the input signal by a sine wave, the frequency of which is set using the Frequency and Fine Tune controls.  As if ring modulation wasn't harsh enough already, the Feedback parameter can add even more edge to the sound!
+
+[Docs](http://mda.smartelectronix.com/vst/help/ringmod.htm)
+
+### Shepard
+
+Shepard tone generator
+
+This plug-in generates a continuously rising or falling tone.  Or rather, that's what it sounds like but really new harmonics are always appearing at one end of the spectrum and disappearing at the other. (Using some EQ can improve the psychoacoustic effect, depending on your listening environment.) 
+
+These continuous tones are actually called "Risset tones", developed from the earlier "Shepard tones" which change in series of discrete steps. The Mode control allows the input signal to be mixed or ring modulated with the tone - this works well as one element of a complex chain of effects.
+
+[Docs](http://mda.smartelectronix.com/vst/help/shepard.htm)
+
+### SubSynth
+
+Sub-Bass Synthesizer: Several low frequency enhancement methods. [Docs](http://mda.smartelectronix.com/vst/help/subsynth.htm)
+
+### Stereo
+
+Stereo Simulator: Add artificial width to a mono signal. Haas delay and comb filtering. [Docs](http://mda.smartelectronix.com/vst/help/stereo.htm)
+
+### TestTone
+
+Signal generator with pink and white noise, impulses and sweeps. [Docs](http://mda.smartelectronix.com/vst/help/testtone.htm)
+
+Note: the AU version of this plug-in has a bunch of extra features and improvements that I didn't convert yet.
 
 ## Plug-ins that have not been converted yet
 
@@ -103,7 +104,6 @@ Acoustic piano instrument — this was quite a [popular free piano synth](https:
 - Re-Psycho! - Drum loop pitch changer
 - RezFilter - Resonant filter with LFO and envelope follower
 - Round Panner - 3D panner
-- Shepard - Continuously rising/falling tone generator
 - Splitter - Frequency / level crossover for setting up dynamic processing
 - Talkbox - High resolution vocoder
 - Thru-Zero Flanger - Classic tape-flanging simulation
