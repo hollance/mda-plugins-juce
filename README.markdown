@@ -88,6 +88,7 @@ Note: the AU version of this plug-in has a bunch of extra features and improveme
 
 ## Plug-ins that have not been converted yet
 
+- Ambience
 - Bandisto - Multi-band distortion
 - BeatBox - Drum replacer 
 - Combo - Amp & speaker simulator
@@ -95,15 +96,20 @@ Note: the AU version of this plug-in has a bunch of extra features and improveme
 - Detune - Simple up/down pitch shifting thickener
 - Dither - Range of dither types including noise shaping 
 - DubDelay - Delay with feedback saturation and time/pitch modulation
+- DX10 - Simple FM Synthesizer
 - Dynamics - Compressor / Limiter / Gate
 - Envelope - Envelope follower / VCA
+- EPiano - synth
 - Image - Stereo image adjustment and M-S matrix
+- JX10 - Simple 2-Oscillator Analog Synthesizer
 - Leslie - Rotary speaker simulator
+- Looplex - ?
 - Loudness - Equal loudness contours for bass EQ and mix correction 
 - Multiband - Multi-band compressor with M-S processing modes 
 - Re-Psycho! - Drum loop pitch changer
 - RezFilter - Resonant filter with LFO and envelope follower
 - Round Panner - 3D panner
+- SpecMeter
 - Splitter - Frequency / level crossover for setting up dynamic processing
 - Talkbox - High resolution vocoder
 - Thru-Zero Flanger - Classic tape-flanging simulation
