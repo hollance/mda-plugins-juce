@@ -27,7 +27,7 @@ This source code is licensed under the [MIT license](LICENSE.txt) but keep in mi
 
 You can find the [original documentation here](http://mda.smartelectronix.com/vst/help/mdaplugs.htm) — if you're not sure how to use a particular plug-in, check there first.
 
-If you're new to audio programming and want to learn how these plug-ins work, start with one of the following:
+If you're new to audio programming and want to learn how these plug-ins work, start with one of the following easy plug-ins:
 
 - RingMod
 - Overdrive
@@ -72,13 +72,13 @@ These continuous tones are actually called "Risset tones", developed from the ea
 
 [Docs](http://mda.smartelectronix.com/vst/help/shepard.htm)
 
-### SubSynth
-
-Sub-Bass Synthesizer: Several low frequency enhancement methods. [Docs](http://mda.smartelectronix.com/vst/help/subsynth.htm)
-
 ### Stereo
 
 Stereo Simulator: Add artificial width to a mono signal. Haas delay and comb filtering. [Docs](http://mda.smartelectronix.com/vst/help/stereo.htm)
+
+### SubSynth
+
+Sub-Bass Synthesizer: Several low frequency enhancement methods. [Docs](http://mda.smartelectronix.com/vst/help/subsynth.htm)
 
 ### TestTone
 
