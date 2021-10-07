@@ -44,6 +44,10 @@ This plug-in reduces the bit-depth and sample rate of the input audio (using the
 
 Simple stereo delay with feedback tone control. [Docs](http://mda.smartelectronix.com/vst/help/delay.htm)
 
+### EPiano
+
+Rhodes Piano. This plug-in is extremely similar to MDA Piano, but uses different samples. It also has some basic LFO modulation.
+
 ### Limiter
 
 Opto-electronic style limiter. [Docs](http://mda.smartelectronix.com/vst/help/limiter.htm)
