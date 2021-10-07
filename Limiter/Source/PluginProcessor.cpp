@@ -269,6 +269,7 @@ void MDALimiterAudioProcessor::setStateInformation(const void *data, int sizeInB
   std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
   if (xml.get() != nullptr && xml->hasTagName(apvts.state.getType())) {
     apvts.replaceState(juce::ValueTree::fromXml(*xml));
+    _parametersChanged.store(true);
   }
 }
 
