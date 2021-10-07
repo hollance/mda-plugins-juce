@@ -236,8 +236,8 @@ void MDAEPianoAudioProcessor::update()
   // the coefficient for that filter. It either has a cutoff of about 794 Hz
   // (slider to the left) or 2241 Hz (slider to the right). Note that the code
   // says 14000 or 5000 but that includes an extra factor 2pi.
-  if (param3 > 0.5f) filtCoef = 14000.0f; else filtCoef = 5000.0f;
-  filtCoef = 1.0f - std::exp(-_inverseSampleRate * filtCoef);
+  if (param3 > 0.5f) _filtCoef = 14000.0f; else _filtCoef = 5000.0f;
+  _filtCoef = 1.0f - std::exp(-_inverseSampleRate * _filtCoef);
 
   // Modulation: The UI shows 100% panning modulation on the left, 0% in the
   // center, and 100% tremolo on the right. For tremolo, both the left and
@@ -499,8 +499,8 @@ void MDAEPianoAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juc
       // Treble boost. This happens in 2 steps: First there is a basic low-pass
       // filter with the difference equation y(n) = f*x(n) + (1 - f)*y(n - 1).
       // The left and right channels have their own instance of this filter.
-      _filtL += filtCoef * (l - _filtL);
-      _filtR += filtCoef * (r - _filtR);
+      _filtL += _filtCoef * (l - _filtL);
+      _filtR += _filtCoef * (r - _filtR);
 
       // Next, we subtract the low-pass filtered signal from the original signal,
       // which leaves only the high / treble frequencies. Then, depending on

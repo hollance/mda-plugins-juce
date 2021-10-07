@@ -178,7 +178,7 @@ private:
 
   // Settings for the treble boost filter.
   float _trebleGain;
-  float filtCoef;
+  float _filtCoef;
 
   // Delay units for the treble boost filter.
   float _filtL, _filtR;
