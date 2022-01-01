@@ -34,6 +34,12 @@ If you're new to audio programming and want to learn how these plug-ins work, st
 - Degrade
 - Delay
 
+### Ambience
+
+Small space reverberator. Designed to simulate a distant mic in small rooms, without the processor overhead of a full reverb plug-in. Can be used to add "softness" to drums and to simulate someone talking "off mic".
+
+[Docs](http://mda.smartelectronix.com/vst/help/ambience.htm)
+
 ### Degrade
 
 This plug-in reduces the bit-depth and sample rate of the input audio (using the Quantize and Sample Rate parameters) and has some other features for attaining the sound of vintage digital hardware.  The headroom control is a peak clipper, and the Non-Linearity controls add some harmonic distortion to thicken the sound.  Post Filter is a low-pass filter to remove some of the grit introduced by the other controls.
@@ -92,7 +98,6 @@ Note: the AU version of this plug-in has a bunch of extra features and improveme
 
 ## Plug-ins that have not been converted yet
 
-- Ambience
 - Bandisto - Multi-band distortion
 - BeatBox - Drum replacer 
 - Combo - Amp & speaker simulator
