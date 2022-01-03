@@ -34,6 +34,13 @@ If you're new to audio programming and want to learn how these plug-ins work, st
 - Degrade
 - Delay
 
+If you're interested in synths, check out:
+
+- MDA Piano
+- MDA EPiano
+- JX10 analog synth
+- DX10 FM synth
+
 ### Ambience
 
 Small space reverberator. Designed to simulate a distant mic in small rooms, without the processor overhead of a full reverb plug-in. Can be used to add "softness" to drums and to simulate someone talking "off mic".
@@ -50,9 +57,21 @@ This plug-in reduces the bit-depth and sample rate of the input audio (using the
 
 Simple stereo delay with feedback tone control. [Docs](http://mda.smartelectronix.com/vst/help/delay.htm)
 
+### DX10
+
+Simple FM synthesizer. Sounds similar to the later Yamaha DX synths including the heavy bass but with a warmer, cleaner tone.
+
+[Docs](http://mda.smartelectronix.com/vst/help/dx10.htm)
+
 ### EPiano
 
 Rhodes Piano. This plug-in is extremely similar to MDA Piano, but uses different samples. It also has some basic LFO modulation.
+
+### JX10
+
+Simple 2-oscillator analog synthesizer. 8 voice polyphonic.
+
+[Docs](http://mda.smartelectronix.com/vst/help/jx10.htm)
 
 ### Limiter
 
