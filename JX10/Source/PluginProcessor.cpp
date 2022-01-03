@@ -258,13 +258,22 @@ void JX10AudioProcessor::resetState()
 {
   // Turn off all playing voices.
   for (int v = 0; v < NVOICES; ++v) {
-    _voices[v].dp   = _voices[v].dp2   = 1.0f;
-    _voices[v].saw  = _voices[v].p     = _voices[v].p2    = 0.0f;
-    _voices[v].env  = _voices[v].envd  = _voices[v].envl  = 0.0f;
-    _voices[v].fenv = _voices[v].fenvd = _voices[v].fenvl = 0.0f;
-    _voices[v].f0   = _voices[v].f1    = _voices[v].f2    = 0.0f;
-    _voices[v].ff   = 0.0f;
-    _voices[v].note = 0;
+    _voices[v].dp    = 1.0f;
+    _voices[v].dp2   = 1.0f;
+    _voices[v].saw   = 0.0f;
+    _voices[v].p     = 0.0f;
+    _voices[v].p2    = 0.0f;
+    _voices[v].env   = 0.0f;
+    _voices[v].envd  = 0.0f;
+    _voices[v].envl  = 0.0f;
+    _voices[v].fenv  = 0.0f;
+    _voices[v].fenvd = 0.0f;
+    _voices[v].fenvl = 0.0f;
+    _voices[v].f0    = 0.0f;
+    _voices[v].f1    = 0.0f;
+    _voices[v].f2    = 0.0f;
+    _voices[v].ff    = 0.0f;
+    _voices[v].note  = 0;
   }
   _numActiveVoices = 0;
 
@@ -516,11 +525,10 @@ void JX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
           default:  // all notes off
             if (data1 > 0x7A) {
               for (int v = 0; v < NVOICES; ++v) {
+                // Setting its envelope to 0 immediately turns off the voice.
+                _voices[v].env  = 0.0f;
+                _voices[v].envd = 0.0f;
                 _voices[v].envl = 0.0f;
-                _voices[v].env = 0.0f;
-
-                // Setting the decay to 0.99 will fade out the voice very quickly.
-                _voices[v].envd = 0.99f;
                 _voices[v].note = 0;
 
                 // Comment from the original code:
@@ -658,85 +666,104 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
           k = KMAX;
         }
 
-        for (int v = 0; v < NVOICES; ++v) {  // for each voice
-          float e = V->env;
-          if (e > SILENCE) {  // Sinc-Loop Oscillator
-            float x = V->p + V->dp;
-            if (x > min) {
-              if (x > V->pmax) {
-                x = V->pmax + V->pmax - x;
+        // Loop through all the voices...
+        for (int v = 0; v < NVOICES; ++v) {
+          // ...but only render the voices that have an active envelope.
+          if (V->env > SILENCE) {
+
+            // Sinc-Loop Oscillator
+            float x1 = V->p + V->dp;
+            if (x1 > min) {
+              if (x1 > V->pmax) {
+                x1 = V->pmax + V->pmax - x1;
                 V->dp = -V->dp;
               }
-              V->p = x;
-              x = V->sin0 * V->sinx - V->sin1;  // sine osc
+              V->p = x1;
+              x1 = V->sin0 * V->sinx - V->sin1;  // sine osc
               V->sin1 = V->sin0;
-              V->sin0 = x;
-              x = x / V->p;
+              V->sin0 = x1;
+              x1 = x1 / V->p;
             } else {
-              V->p = x = - x;
+              V->p = x1 = - x1;
               V->dp = V->period * vib * _pitchBend; //set period for next cycle
               V->pmax = std::floor(0.5f + V->dp) - 0.5f;
               V->dc = -0.5f * V->lev / V->pmax;
               V->pmax *= PI;
               V->dp = V->pmax / V->dp;
-              V->sin0 = V->lev * std::sin(x);
-              V->sin1 = V->lev * std::sin(x - V->dp);
+              V->sin0 = V->lev * std::sin(x1);
+              V->sin1 = V->lev * std::sin(x1 - V->dp);
               V->sinx = 2.0f * std::cos(V->dp);
-              if (x*x > 0.1f) {
-                x = V->sin0 / x;
+              if (x1*x1 > 0.1f) {
+                x1 = V->sin0 / x1;
               } else {
-                x = V->lev;
+                x1 = V->lev;
               }
             }
 
-            float y = V->p2 + V->dp2;  // osc2
-            if (y > min) {
-              if (y > V->pmax2) {
-                y = V->pmax2 + V->pmax2 - y;
+            float x2 = V->p2 + V->dp2;  // osc2
+            if (x2 > min) {
+              if (x2 > V->pmax2) {
+                x2 = V->pmax2 + V->pmax2 - x2;
                 V->dp2 = -V->dp2;
               }
-              V->p2 = y;
-              y = V->sin02 * V->sinx2 - V->sin12;
+              V->p2 = x2;
+              x2 = V->sin02 * V->sinx2 - V->sin12;
               V->sin12 = V->sin02;
-              V->sin02 = y;
-              y = y / V->p2;
+              V->sin02 = x2;
+              x2 = x2 / V->p2;
             } else {
-              V->p2 = y = - y;
+              V->p2 = x2 = - x2;
               V->dp2 = V->period * V->detune * pwm * _pitchBend;
               V->pmax2 = std::floor(0.5f + V->dp2) - 0.5f;
               V->dc2 = -0.5f * V->lev2 / V->pmax2;
               V->pmax2 *= PI;
               V->dp2 = V->pmax2 / V->dp2;
-              V->sin02 = V->lev2 * std::sin(y);
-              V->sin12 = V->lev2 * std::sin(y - V->dp2);
+              V->sin02 = V->lev2 * std::sin(x2);
+              V->sin12 = V->lev2 * std::sin(x2 - V->dp2);
               V->sinx2 = 2.0f * std::cos(V->dp2);
-              if (y*y > 0.1f) {
-                y = V->sin02 / y;
+              if (x2*x2 > 0.1f) {
+                x2 = V->sin02 / x2;
               } else {
-                y = V->lev2;
+                x2 = V->lev2;
               }
             }
 
-            V->saw = V->saw * hpf + V->dc + x - V->dc2 - y;  // integrated sinc = saw
-            x = V->saw + noise;
+            V->saw = V->saw * hpf + V->dc + x1 - V->dc2 - x2;  // integrated sinc = saw
+
+            // Combine the output from the oscillators with the noise.
+            float x = V->saw + noise;
+
+            // Update the amplitude envelope. This is basically a one-pole
+            // filter creating an analog-style exponential envelope curve.
             V->env += V->envd * (V->envl - V->env);
 
-            if (k == KMAX) {  // filter freq update at LFO rate
-              if ((V->env + V->envl) > 3.0f) {  // envelopes
+            // Do the following updates at the LFO update rate.
+            if (k == KMAX) {
+              // Done with the attack portion? Then go into decay. Recall that
+              // envl is 2.0 when the envelope is in the attack stage -- that's
+              // how we tell apart the different stages.
+              if (V->env + V->envl > 3.0f) {
                 V->envd = _envDecay;
                 V->envl = _envSustain;
               }
+
+              // Update the filter envelope. This is the same equation as for
+              // the amplitude envelope, but only performed every KMAX samples.
               V->fenv += V->fenvd * (V->fenvl - V->fenv);
-              if ((V->fenv + V->fenvl) > 3.0f) {
+
+              // Done with the attack portion? Then go into decay.
+              if (V->fenv + V->fenvl > 3.0f) {
                 V->fenvd = _filterDecay;
                 V->fenvl = _filterSustain;
               }
 
+              //TODO filter freq update
               fz += 0.005f * (ff - fz);  // filter zipper noise filter
-              y = V->fc * std::exp(fz + _filterEnv * V->fenv) * _inversePitchBend;  // filter cutoff
+              float y = V->fc * std::exp(fz + _filterEnv * V->fenv) * _inversePitchBend;  // filter cutoff
               if (y < 0.005f) { y = 0.005f; }
               V->ff = y;
 
+              //TODO
               V->period += _glide * (V->target - V->period); // glide
               if (V->target < V->period) {
                 V->period += _glide * (V->target - V->period);
@@ -745,12 +772,14 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
 
             if (V->ff > fx) { V->ff = fx; }  // stability limit
 
-            V->f0 += V->ff * V->f1;  // state-variable filter
+            // State-variable filter.
+            V->f0 += V->ff * V->f1;
             V->f1 -= V->ff * (V->f0 + fq * V->f1 - x - V->f2);
             V->f1 -= 0.2f * V->f1 * V->f1 * V->f1;  // soft limit
-
             V->f2 = x;
 
+            // The output for this voice is the amplitude envelope times the
+            // output from the filter.
             o += V->env * V->f0;
           }
 
@@ -780,8 +809,11 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
     _numActiveVoices = NVOICES;
     for (int v = 0; v < NVOICES; ++v) {
       if (_voices[v].env < SILENCE) {
-        _voices[v].env = _voices[v].envl = 0.0f;
-        _voices[v].f0 = _voices[v].f1 = _voices[v].f2 = 0.0f;
+        _voices[v].env = 0.0f;
+        _voices[v].envl = 0.0f;
+        _voices[v].f0 = 0.0f;
+        _voices[v].f1 = 0.0f;
+        _voices[v].f2 = 0.0f;
         _voices[v].ff = 0.0f;
         _numActiveVoices--;
       }
@@ -806,15 +838,18 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
 
 void JX10AudioProcessor::noteOn(int note, int velocity)
 {
-  float l = 100.0f;  // louder than any envelope!
-  int held = 0;
-
   if (velocity > 0) {  // note on
     if (_ignoreVelocity) { velocity = 80; }
 
+    // === Find voice ===
+
+    float l = 100.0f;  // louder than any envelope!
+    int held = 0;      // how many notes playing
     int v = 0;
 
     if (_mode & 4) {  // monophonic
+
+      // TODO
       if (_voices[0].note > 0) {  // legato pitch change
         for (int tmp = NVOICES - 1; tmp > 0; tmp--) {  // queue any held notes
           _voices[tmp].note = _voices[tmp - 1].note;
@@ -828,8 +863,10 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
         _voices[v].note = note;
         return;
       }
+
     } else {  // polyphonic
-      for (int tmp = 0; tmp < NVOICES; tmp++) {  // replace quietest voice not in attack
+      // Replace quietest voice not in attack.
+      for (int tmp = 0; tmp < NVOICES; tmp++) {
         if (_voices[tmp].note > 0) { held++; }
         if (_voices[tmp].env < l && _voices[tmp].envl < 2.0f) {
           l = _voices[tmp].env;
@@ -837,6 +874,9 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
         }
       }
     }
+
+    // === Calculate pitch ===
+
     float p = _tune * std::exp(-0.05776226505f * (float(note) + ANALOG * float(v)));
     while (p < 3.0f || (p * _detune) < 3.0f) { p += p; }
     _voices[v].target = p;
@@ -851,7 +891,11 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
 
     _voices[v].note = lastnote = note;
 
+    // TODO
+
     _voices[v].fc = std::exp(_filterVelocitySensitivity * float(velocity - 64)) / p;  // filter tracking
+
+    // TODO
 
     _voices[v].lev = _volumeTrim * _volume * (0.004f * float((velocity + 64) * (velocity + 64)) - 8.0f);
     _voices[v].lev2 = _voices[v].lev * _oscMix;
@@ -883,6 +927,10 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
       //else
       _voices[v].env += SILENCE + SILENCE;  // anti-glitching trick
     }
+
+    // Start the attack portion of the envelope. The target level is not 1.0
+    // but 2.0 in order to make the attack steeper than a regular exponential
+    // curve. The attack ends when the envelope level exceeds 1.0.
     _voices[v].envl  = 2.0f;
     _voices[v].envd  = _envAttack;
     _voices[v].fenvl = 2.0f;
@@ -892,6 +940,7 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
   // Note off
   else {
     if ((_mode & 4) && (_voices[0].note == note)) {  // monophonic (and current note)
+      int held = 0;
       int v;
       for (v = NVOICES - 1; v > 0; v--) {
         if (_voices[v].note > 0) { held = v; }  // any other notes queued?
@@ -915,7 +964,9 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
       }
     } else {  // polyphonic
       for (int v = 0; v < NVOICES; v++) {
-        if (_voices[v].note == note) {  // any voices playing that note?
+        // Any voices playing this note?
+        if (_voices[v].note == note) {
+          // If the sustain pedal is not pressed, then start envelope release.
           if (_sustain == 0) {
             _voices[v].envl  = 0.0f;
             _voices[v].envd  = _envRelease;
@@ -923,6 +974,7 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
             _voices[v].fenvd = _filterRelease;
             _voices[v].note  = 0;
           } else {
+            // Sustain pedal is pressed, so put the note in sustain mode.
             _voices[v].note = SUSTAIN;
           }
         }

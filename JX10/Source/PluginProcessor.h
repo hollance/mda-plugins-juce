@@ -54,15 +54,18 @@ struct Voice
   float f2;
 
   float saw;
-  float env;
-  float envd;
-  float envl;
-  float fenv;
-  float fenvd;
-  float fenvl;
 
-  float lev;  //osc levels
+  float env;     // current amplitude envelope level
+  float envd;    // envelope decay value
+  float envl;    // envelope target level
+
+  float fenv;    // current filter envelope level
+  float fenvd;   // envelope decay value
+  float fenvl;   // envelope target level
+
+  float lev;     // osc levels
   float lev2;
+
   float target; //period target
 
   // What note triggered this voice, or SUSTAIN when the key is released
