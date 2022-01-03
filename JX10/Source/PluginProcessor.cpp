@@ -292,20 +292,18 @@ void JX10AudioProcessor::resetState()
 
   // Reset the rest.
   _lfo = 0.0f;
+  _lfoStep = 0;
   fzip = 0.0f;
-  K = 0;
   lastnote = 0;
   _noiseSeed = 22222;
 }
 
 void JX10AudioProcessor::update()
 {
-  // Oscillator mix.
-  float param0 = apvts.getRawParameterValue("OSC Mix")->load();
-  _oscMix = param0;
-//printf("_oscMix %f\n", _oscMix);
+  // Oscillator mix. Keep this as a value between 0 and 1.
+  _oscMix = apvts.getRawParameterValue("OSC Mix")->load();
 
-  // Tune oscillator up or down by up to 24 semitones.
+  // Tune oscillator up or down by max 24 semitones, in steps of 1 semitone.
   float param1 = apvts.getRawParameterValue("OSC Tune")->load();
   float semi = std::floor(48.0f * param1) - 24.0f;
 
@@ -314,25 +312,24 @@ void JX10AudioProcessor::update()
   float cent = 15.876f * param2 - 7.938f;
   cent = 0.1f * std::floor(cent * cent * cent);
 
-  // Calculate the multiplication factor for detuning the pitch.
-  // This is the same as 2^(N/12) where N is the number of semitones.
+  // Calculate the multiplication factor for detuning the pitch. This is the
+  // same as 2^(N/12) where N is the number of (fractional) semitones.
   _detune = std::pow(1.059463094359f, -semi - 0.01f * cent);
-//printf("_detune %f\n", _detune);
 
   // Mono / poly / glide mode. This is an integer value from 0 to 7.
   float param3 = apvts.getRawParameterValue("Mode")->load();
   _mode = int(7.9f * param3);
-//printf("_mode %d\n", _mode);
 
-  // Use a lower update rate for the glide and filter envelope.
-  const float ifs = _inverseSampleRate * KMAX;
-//printf("ifs %f\n", ifs);
+  // Use a lower update rate for the glide and filter envelope. This is 32
+  // times slower than the sample rate.
+  const float _inverseUpdateRate = _inverseSampleRate * LFO_MAX;
 
+//TODO
   float param4 = apvts.getRawParameterValue("Gld Rate")->load();
   if (param4 < 0.02f) {
     _glide = 1.0f;
   } else {
-    _glide = 1.0f - std::exp(-ifs * std::exp(6.0f - 7.0f * param4));
+    _glide = 1.0f - std::exp(-_inverseUpdateRate * std::exp(6.0f - 7.0f * param4));
   }
 //printf("_glide %f\n", _glide);
 
@@ -359,7 +356,6 @@ void JX10AudioProcessor::update()
   // Filter LFO intensity. Parabolic curve from 0 to 2.5.
   float param9 = apvts.getRawParameterValue("VCF LFO")->load();
   _filterLFO = 2.5f * param9 * param9;
-//printf("_filterLFO %f\n", _filterLFO);
 
   // Filter velocity sensitivity. Value between -0.05 and +0.05.
   // If disabled, we completely ignore the velocity.
@@ -374,57 +370,68 @@ void JX10AudioProcessor::update()
 //printf("_filterVelocitySensitivity %f\n", _filterVelocitySensitivity);
 //printf("_ignoreVelocity %d\n", _ignoreVelocity);
 
-//TODO: explain these curves (maybe just render the envelope shape?)
+  // The envelope is implemented using a simple one-pole filter, which creates
+  // an analog-style exponential curve. The formulas below calculate the filter
+  // coefficients for the attack, decay, and release stages.
+  // The knobs for these parameters let you set the time, but only indirectly.
+  // For decay and release, they describe how long it takes to drop from full
+  // level down to -80 dB (SILENCE = 0.0001). When set to 0%, the decay time is
+  // roughly 37 ms (this is -ln(0.0001)/exp(5.5)). When set to 100%, it is ~68
+  // seconds (this is -ln(0.0001)/exp(-2.0)).
+  // These seem like fairly arbitrary values; my guess is that the original
+  // author just picked a "good enough" curve that was simple to implement.
+  // The attack coefficient uses the same formula, however the attack time is
+  // shorter than the decay because the attack curve is sharper.
+  // The VCF envelope uses the same times as the envelope amplitude but its
+  // filter is updated at a lower rate (once every 32 samples).
+
   float param11 = apvts.getRawParameterValue("VCF Att")->load();
-  _filterAttack = 1.0f - std::exp(-ifs * exp(5.5f - 7.5f * param11));
-//printf("_filterAttack %f\n", _filterAttack);
+  _filterAttack = 1.0f - std::exp(-_inverseUpdateRate * exp(5.5f - 7.5f * param11));
 
   float param12 = apvts.getRawParameterValue("VCF Dec")->load();
-  _filterDecay = 1.0f - std::exp(-ifs * exp(5.5f - 7.5f * param12));
-//printf("_filterDecay %f\n", _filterDecay);
+  _filterDecay = 1.0f - std::exp(-_inverseUpdateRate * exp(5.5f - 7.5f * param12));
 
+  // The sustain level for the filter envelope is exponential(ish) because
+  // frequencies are logarithmic.
   float param13 = apvts.getRawParameterValue("VCF Sus")->load();
   _filterSustain = param13 * param13;
-//printf("_filterSustain %f\n", _filterSustain);
 
   float param14 = apvts.getRawParameterValue("VCF Rel")->load();
-  _filterRelease = 1.0f - std::exp(-ifs * std::exp(5.5f - 7.5f * param14));
-//printf("_filterRelease %f\n", _filterRelease);
+  _filterRelease = 1.0f - std::exp(-_inverseUpdateRate * std::exp(5.5f - 7.5f * param14));
 
   float param15 = apvts.getRawParameterValue("ENV Att")->load();
   _envAttack = 1.0f - std::exp(-_inverseSampleRate * std::exp(5.5f - 7.5f * param15));
-//printf("_envAttack %f\n", _envAttack);
 
   float param16 = apvts.getRawParameterValue("ENV Dec")->load();
   _envDecay = 1.0f - std::exp(-_inverseSampleRate * std::exp(5.5f - 7.5f * param16));
-//printf("_envDecay %f\n", _envDecay);
 
   float param17 = apvts.getRawParameterValue("ENV Sus")->load();
   _envSustain = param17;
-//printf("_envSustain %f\n", _envSustain);
 
   float param18 = apvts.getRawParameterValue("ENV Rel")->load();
   _envRelease = 1.0f - std::exp(-_inverseSampleRate * std::exp(5.5f - 7.5f * param18));
   if (param18 < 0.01f) { _envRelease = 0.1f; }  // extra fast release
-//printf("_envRelease %f\n", _envRelease);
 
+  // The LFO rate is an exponentional curve that maps the 0 - 1 parameter value
+  // to 0.0183 Hz - 20.086 Hz. We use this to calculate the phase increment for
+  // a sine wave running at 1/32th the sample rate.
   float param19 = apvts.getRawParameterValue("LFO Rate")->load();
   float lfoRate = std::exp(7.0f * param19 - 4.0f);
-  _lfoInc = lfoRate * _inverseSampleRate * float(TWOPI * KMAX);  // TODO: ifs * TWOPI?
-//printf("_lfoInc %f\n", _lfoInc);
+  _lfoInc = lfoRate * _inverseUpdateRate * float(TWOPI);
 
+  // The vibrato / PWM setting is 0.05 for 100% and 0.0 for 0%. You can choose
+  // between PWM mode (to the left) and vibrato mode (to the right).
   float param20 = apvts.getRawParameterValue("Vibrato")->load();
   _vibrato = 0.2f * (param20 - 0.5f) * (param20 - 0.5f);
-  _pwmdep = _vibrato;
+  _pwmDepth = _vibrato;
   if (param20 < 0.5f) { _vibrato = 0.0f; }
-//printf("_vibrato %f\n", _vibrato);
-//printf("_pwmdep %f\n", _pwmdep);
 
   // Noise level. This is a parabola from 0 to 1 (similar to skew = 2 in JUCE).
   float param21 = apvts.getRawParameterValue("Noise")->load();
   _noiseMix = param21 * param21;
 
-  _volumeTrim = (3.2f - param0 - 1.5f * _noiseMix) * (1.5f - 0.5f * param7);
+//TODO
+  _volumeTrim = (3.2f - _oscMix - 1.5f * _noiseMix) * (1.5f - 0.5f * param7);
 
   // Lower the noise level so that the maximum is roughly -24 dB.
   _noiseMix *= 0.06f;
@@ -604,13 +611,13 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
   const float min = 1.0f;
   const float fq = _filterQ * _resonanceCtl;
   const float fx = 1.97f - 0.85f * fq;
-  float fz = fzip;
-  int k = K;
 
-  float vib = std::sin(_lfo);
-  float ff = _filterCutoff + _filterCtl + (_filterLFO + _pressure) * vib; //have to do again here as way that
-  float pwm = 1.0f + vib * (_modWheel + _pwmdep);           //below triggers on k was too cheap!
-  vib = 1.0f + vib * (_modWheel + _vibrato);
+  // Calculate the LFO-modulated things. We need to do this at the start of
+  // the block, but also do this every 32 samples inside the loop (see below).
+  const float sine = std::sin(_lfo);
+  float ff = _filterCutoff + _filterCtl + (_filterLFO + _pressure) * sine;
+  float pwm = 1.0f + sine * (_modWheel + _pwmDepth);
+  float vib = 1.0f + sine * (_modWheel + _vibrato);
 
   // Is there at least one active voice, or any pending MIDI event?
   if (_numActiveVoices > 0 || _notes[event] < sampleFrames) {
@@ -644,7 +651,7 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
         // Generate the next integer pseudorandom number.
         _noiseSeed = _noiseSeed * 196314165 + 907633515;
 
-        // Convert this to a float. This gives a number between 2 and 4.
+        // Convert the integer to a float, to get a number between 2 and 4.
         // That's because 32-bit floating point numbers from 2.0 to 4.0 have
         // the hexadecimal form 0x40000000 - 0x407fffff.
         unsigned int r = (_noiseSeed & 0x7FFFFF) + 0x40000000;
@@ -654,16 +661,26 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
         // by the noise level setting.
         noise = _noiseMix * (noise - 3.0f);
 
-        // === TODO ===
+        // === LFO ===
 
-        if (--k < 0) {
+        // The LFO and any things it modulates are updated every 32 samples.
+        if (--_lfoStep < 0) {
           _lfo += _lfoInc;
           if (_lfo > PI) { _lfo -= TWOPI; }
-          vib = std::sin(_lfo);
-          ff = _filterCutoff + _filterCtl + (_filterLFO + _pressure) * vib;
-          pwm = 1.0f + vib * (_modWheel + _pwmdep);
-          vib = 1.0f + vib * (_modWheel + _vibrato);
-          k = KMAX;
+
+          // The LFO is a basic sine wave.
+          const float sine = std::sin(_lfo);
+
+          // The current filter frequency is the combination of the parameter
+          // set by the user, the MIDI CC, aftertouch, and the LFO intensity.
+          ff = _filterCutoff + _filterCtl + (_filterLFO + _pressure) * sine;
+
+          // The modulation intensity for vibrato / PWM is set by the parameter
+          // and by the modulation wheel.
+          pwm = 1.0f + sine * (_modWheel + _pwmDepth);
+          vib = 1.0f + sine * (_modWheel + _vibrato);
+
+          _lfoStep = LFO_MAX;
         }
 
         // Loop through all the voices...
@@ -671,6 +688,7 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
           // ...but only render the voices that have an active envelope.
           if (V->env > SILENCE) {
 
+//TODO
             // Sinc-Loop Oscillator
             float x1 = V->p + V->dp;
             if (x1 > min) {
@@ -700,6 +718,7 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
               }
             }
 
+//TODO
             float x2 = V->p2 + V->dp2;  // osc2
             if (x2 > min) {
               if (x2 > V->pmax2) {
@@ -728,6 +747,7 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
               }
             }
 
+//TODO
             V->saw = V->saw * hpf + V->dc + x1 - V->dc2 - x2;  // integrated sinc = saw
 
             // Combine the output from the oscillators with the noise.
@@ -735,12 +755,13 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
 
             // Update the amplitude envelope. This is basically a one-pole
             // filter creating an analog-style exponential envelope curve.
+            // It does the same as: `env = (1 - envd)*env + envd*envl`.
             V->env += V->envd * (V->envl - V->env);
 
             // Do the following updates at the LFO update rate.
-            if (k == KMAX) {
+            if (_lfoStep == LFO_MAX) {
               // Done with the attack portion? Then go into decay. Recall that
-              // envl is 2.0 when the envelope is in the attack stage -- that's
+              // envl is 2.0 when the envelope is in the attack stage; that is
               // how we tell apart the different stages.
               if (V->env + V->envl > 3.0f) {
                 V->envd = _envDecay;
@@ -748,7 +769,7 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
               }
 
               // Update the filter envelope. This is the same equation as for
-              // the amplitude envelope, but only performed every KMAX samples.
+              // the amplitude envelope, but only performed every LFO_MAX steps.
               V->fenv += V->fenvd * (V->fenvl - V->fenv);
 
               // Done with the attack portion? Then go into decay.
@@ -758,8 +779,8 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
               }
 
               //TODO filter freq update
-              fz += 0.005f * (ff - fz);  // filter zipper noise filter
-              float y = V->fc * std::exp(fz + _filterEnv * V->fenv) * _inversePitchBend;  // filter cutoff
+              fzip += 0.005f * (ff - fzip);  // filter zipper noise filter
+              float y = V->fc * std::exp(fzip + _filterEnv * V->fenv) * _inversePitchBend;  // filter cutoff
               if (y < 0.005f) { y = 0.005f; }
               V->ff = y;
 
@@ -786,10 +807,6 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
           // Go to the next active voice.
           V++;
         }
-
-//if (std::isnan(o) || std::isinf(o)) {
-//  printf("woots\n");
-//}
 
         // Write the result into the output buffer.
         *out1++ = o;
@@ -828,9 +845,6 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
 
   // Mark the events buffer as done.
   _notes[0] = EVENTS_DONE;
-
-  fzip = fz;
-  K = k;
 
   protectYourEars(out1, buffer.getNumSamples());
   protectYourEars(out2, buffer.getNumSamples());

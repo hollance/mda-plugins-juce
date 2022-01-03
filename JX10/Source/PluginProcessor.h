@@ -154,28 +154,19 @@ private:
   // How many voices are currently in use.
   int _numActiveVoices;
 
-  // === MIDI CC values ===
+  float fzip;
 
-  // Status of the damper pedal: 64 = pressed, 0 = released.
-  int _sustain;
+  // How often we update the LFO, in samples.
+  const int LFO_MAX = 32;
 
-  // Output gain in linear units. Can be changed by MIDI CC 7.
-  float _volume;
+  // The LFO only updates every 32 samples. This counter keep track of when
+  // the next update is.
+  int _lfoStep;
 
-  // Modulation wheel value.
-  float _modWheel;
+  int lastnote;
 
-  // Setting of the filter cutoff controller (MIDI CC 0x02, 0x03, or 0x4a).
-  float _filterCtl;
-
-  // Setting of the resonance controller (MIDI CC 0x10 or 0x47).
-  float _resonanceCtl;
-
-  // Amount of channel aftertouch.
-  float _pressure;
-
-  // Pitch bend value, and its inverse.
-  float _pitchBend, _inversePitchBend;
+  // Pseudo random number generator.
+  unsigned int _noiseSeed;
 
   // === Parameter values ===
 
@@ -203,15 +194,18 @@ private:
   // Low-pass filter settings.
   float _filterCutoff, _filterQ;
 
-  float _filterEnv;
-
+  // LFO intensity for the filter cutoff.
   float _filterLFO;
+
+  float _filterEnv;
 
   float _filterVelocitySensitivity;
 
+  // If this is set, velocity sensitivity is completely off and all notes will
+  // be played with the same velocity.
   bool _ignoreVelocity;
 
-  // Filter ADSR settings. TODO: units
+  // Filter ADSR settings.
   float _filterAttack, _filterDecay, _filterSustain, _filterRelease;
 
   // Amplitude ADSR settings.
@@ -220,23 +214,36 @@ private:
   // Current LFO value and phase increment.
   float _lfo, _lfoInc;
 
+  // Gain for mixing the noise into the output.
   float _noiseMix;
 
   float _volumeTrim;
 
-  float _vibrato, _pwmdep;
+  // LFO intensity for vibrato and PWM.
+  float _vibrato, _pwmDepth;
 
-  // === Synthesizer state ===
+  // === MIDI CC values ===
 
-//TODO: what is this?
-  #define KMAX 32
+  // Status of the damper pedal: 64 = pressed, 0 = released.
+  int _sustain;
 
-  float fzip;
-  int K;
-  int lastnote;
+  // Output gain in linear units. Can be changed by MIDI CC 7.
+  float _volume;
 
-  // Pseudo random number generator.
-  unsigned int _noiseSeed;
+  // Modulation wheel value. Sets the modulation depth for vibrato / PWM.
+  float _modWheel;
+
+  // MIDI CC amount used to modulate the cutoff frequency.
+  float _filterCtl;
+
+  // MIDI CC amount used to modulate the filter Q.
+  float _resonanceCtl;
+
+  // Amount of channel aftertouch. This is used to modulate the filter cutoff.
+  float _pressure;
+
+  // Pitch bend value, and its inverse.
+  float _pitchBend, _inversePitchBend;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JX10AudioProcessor)
 };
