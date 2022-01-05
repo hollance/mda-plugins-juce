@@ -29,48 +29,59 @@ struct JX10Program
 // State for an active voice.
 struct Voice
 {
-  float period;
-  float p;    //sinc position
-  float pmax; //loop length
-  float dp;   //delta
-  float sin0; //sine osc
-  float sin1;
-  float sinx;
-  float dc;   //dc offset
-
-  float detune;
-  float p2;    //sinc position
-  float pmax2; //loop length
-  float dp2;   //delta
-  float sin02; //sine osc
-  float sin12;
-  float sinx2;
-  float dc2;   //dc offset
-
-  float fc;  //filter cutoff root
-  float ff;  //filter cutoff
-  float f0;  //filter buffers
-  float f1;
-  float f2;
-
-  float saw;
-
-  float env;     // current amplitude envelope level
-  float envd;    // envelope decay value
-  float envl;    // envelope target level
-
-  float fenv;    // current filter envelope level
-  float fenvd;   // envelope decay value
-  float fenvl;   // envelope target level
-
-  float lev;     // osc levels
-  float lev2;
-
-  float target; //period target
-
   // What note triggered this voice, or SUSTAIN when the key is released
   // but the sustain pedal is held down.
   int note;
+
+  // The "period" of the waveform in samples. This is actually only half the
+  // period due to the way the oscillators are implemented: they count up for
+  // `period` samples and then down for `period` samples.
+  float period;   // current period, which may be gliding up to target
+  float target;   // for gliding
+
+  // Amount of detuning for osc 2.
+  float detune;
+
+  // Oscillator 1
+  float p1;       // sinc position
+  float pmax1;    // loop length
+  float dp1;      // delta
+  float sin01;    // sine oscillator
+  float sin11;
+  float sinx1;
+  float dc1;      // dc offset
+  float lev1;     // amplitude
+
+  // Oscillator 2
+  float p2;       // sinc position
+  float pmax2;    // loop length
+  float dp2;      // delta
+  float sin02;    // sine oscillator
+  float sin12;
+  float sinx2;
+  float dc2;      // dc offset
+  float lev2;     // amplitude
+
+  // Used to integrate the outputs from the oscillators to produce a saw wave.
+  float saw;
+
+  float fc;      // filter cutoff TODO
+  float ff;      // modulated filter cutoff TODO
+
+  // Filter delay units
+  float f0;      // low-pass output
+  float f1;      // band-pass output
+  float f2;      // x[n - 1]
+
+  // Amplitude envelope
+  float env;     // current envelope level
+  float envd;    // decay multiplier
+  float envl;    // target level
+
+  // Filter envelope
+  float fenv;    // current envelope level
+  float fenvd;   // decay multiplier
+  float fenvl;   // target level
 };
 
 class JX10AudioProcessor : public juce::AudioProcessor,
@@ -154,7 +165,8 @@ private:
   // How many voices are currently in use.
   int _numActiveVoices;
 
-  float fzip;
+  // Used to smoothen changes in filter cutoff frequency.
+  float _filterZip;
 
   // How often we update the LFO, in samples.
   const int LFO_MAX = 32;
@@ -163,7 +175,7 @@ private:
   // the next update is.
   int _lfoStep;
 
-  int lastnote;
+  int _lastNote;
 
   // Pseudo random number generator.
   unsigned int _noiseSeed;
@@ -183,7 +195,8 @@ private:
   // 1.0 = osc2 has same level as osc 1.
   float _oscMix;
 
-  // Amount of detuning for oscillator 2.
+  // Amount of detuning for oscillator 2. This is a multiplier for the period
+  // of the oscillator.
   float _detune;
 
   // Master tuning.
@@ -195,9 +208,10 @@ private:
   float _filterCutoff, _filterQ;
 
   // LFO intensity for the filter cutoff.
-  float _filterLFO;
+  float _filterLFODepth;
 
-  float _filterEnv;
+  // Envelope intensity for the filter cutoff.
+  float _filterEnvDepth;
 
   float _filterVelocitySensitivity;
 
@@ -217,6 +231,7 @@ private:
   // Gain for mixing the noise into the output.
   float _noiseMix;
 
+  // Used to keep the output gain constant after changing parameters.
   float _volumeTrim;
 
   // LFO intensity for vibrato and PWM.
@@ -242,7 +257,7 @@ private:
   // Amount of channel aftertouch. This is used to modulate the filter cutoff.
   float _pressure;
 
-  // Pitch bend value, and its inverse.
+  // Pitch bend value, and its inverse. Also used to modulate the filter.
   float _pitchBend, _inversePitchBend;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JX10AudioProcessor)

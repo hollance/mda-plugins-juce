@@ -258,10 +258,10 @@ void JX10AudioProcessor::resetState()
 {
   // Turn off all playing voices.
   for (int v = 0; v < NVOICES; ++v) {
-    _voices[v].dp    = 1.0f;
+    _voices[v].dp1   = 1.0f;
     _voices[v].dp2   = 1.0f;
     _voices[v].saw   = 0.0f;
-    _voices[v].p     = 0.0f;
+    _voices[v].p1    = 0.0f;
     _voices[v].p2    = 0.0f;
     _voices[v].env   = 0.0f;
     _voices[v].envd  = 0.0f;
@@ -293,8 +293,8 @@ void JX10AudioProcessor::resetState()
   // Reset the rest.
   _lfo = 0.0f;
   _lfoStep = 0;
-  fzip = 0.0f;
-  lastnote = 0;
+  _filterZip = 0.0f;
+  _lastNote = 0;
   _noiseSeed = 22222;
 }
 
@@ -303,7 +303,7 @@ void JX10AudioProcessor::update()
   // Oscillator mix. Keep this as a value between 0 and 1.
   _oscMix = apvts.getRawParameterValue("OSC Mix")->load();
 
-  // Tune oscillator up or down by max 24 semitones, in steps of 1 semitone.
+  // Detune up or down by max 24 semitones, in steps of 1 semitone.
   float param1 = apvts.getRawParameterValue("OSC Tune")->load();
   float semi = std::floor(48.0f * param1) - 24.0f;
 
@@ -312,16 +312,26 @@ void JX10AudioProcessor::update()
   float cent = 15.876f * param2 - 7.938f;
   cent = 0.1f * std::floor(cent * cent * cent);
 
-  // Calculate the multiplication factor for detuning the pitch. This is the
-  // same as 2^(N/12) where N is the number of (fractional) semitones.
+  /*
+    Calculate the multiplication factor for detuning oscillator 2. This is
+    the same as 2^(N/12) where N is the number of (fractional) semitones.
+
+    The maximum to detune downwards is 4.12, which is -24 semitones and -50
+    cents: 2^(24.5/12). The maximum to detune upwards is 0.242, or +24 semi
+    and +50 cents, or 2^(-24.5/12).
+
+    This value will be multiplied with the oscillator period, which is why
+    detuning down is greater than 1, as lowering the pitch means the period
+    becomes longer. And vice versa for going up in pitch.
+  */
   _detune = std::pow(1.059463094359f, -semi - 0.01f * cent);
 
   // Mono / poly / glide mode. This is an integer value from 0 to 7.
   float param3 = apvts.getRawParameterValue("Mode")->load();
   _mode = int(7.9f * param3);
 
-  // Use a lower update rate for the glide and filter envelope. This is 32
-  // times slower than the sample rate.
+  // Use a lower update rate for the glide and filter envelope.
+  // This is 32 times (= LFO_MAX) slower than the sample rate.
   const float _inverseUpdateRate = _inverseSampleRate * LFO_MAX;
 
 //TODO
@@ -350,12 +360,12 @@ void JX10AudioProcessor::update()
 
   // Filter envelope intensity. Curve from -6.0 to +6.0.
   float param8 = apvts.getRawParameterValue("VCF Env")->load();
-  _filterEnv = 12.0f * param8 - 6.0f;
+  _filterEnvDepth = 12.0f * param8 - 6.0f;
 //printf("_filterEnv %f\n", _filterEnv);
 
   // Filter LFO intensity. Parabolic curve from 0 to 2.5.
   float param9 = apvts.getRawParameterValue("VCF LFO")->load();
-  _filterLFO = 2.5f * param9 * param9;
+  _filterLFODepth = 2.5f * param9 * param9;
 
   // Filter velocity sensitivity. Value between -0.05 and +0.05.
   // If disabled, we completely ignore the velocity.
@@ -370,20 +380,28 @@ void JX10AudioProcessor::update()
 //printf("_filterVelocitySensitivity %f\n", _filterVelocitySensitivity);
 //printf("_ignoreVelocity %d\n", _ignoreVelocity);
 
-  // The envelope is implemented using a simple one-pole filter, which creates
-  // an analog-style exponential curve. The formulas below calculate the filter
-  // coefficients for the attack, decay, and release stages.
-  // The knobs for these parameters let you set the time, but only indirectly.
-  // For decay and release, they describe how long it takes to drop from full
-  // level down to -80 dB (SILENCE = 0.0001). When set to 0%, the decay time is
-  // roughly 37 ms (this is -ln(0.0001)/exp(5.5)). When set to 100%, it is ~68
-  // seconds (this is -ln(0.0001)/exp(-2.0)).
-  // These seem like fairly arbitrary values; my guess is that the original
-  // author just picked a "good enough" curve that was simple to implement.
-  // The attack coefficient uses the same formula, however the attack time is
-  // shorter than the decay because the attack curve is sharper.
-  // The VCF envelope uses the same times as the envelope amplitude but its
-  // filter is updated at a lower rate (once every 32 samples).
+  /*
+    The envelope is implemented using a simple one-pole filter, which creates
+    an analog-style exponential curve. The formulas below calculate the filter
+    coefficients for the attack, decay, and release stages.
+
+    The knobs for these parameters let you set the time, but only indirectly.
+    For decay and release, they describe how long it takes to drop from full
+    level down to -80 dB (SILENCE = 0.0001).
+
+    When set to 0%, the decay time is roughly 37 ms (or -ln(0.0001)/exp(5.5)).
+    When set to 100%, it is ~68 seconds (this is -ln(0.0001)/exp(-2.0)).
+
+    These seem like fairly arbitrary values; my guess is that the original
+    author just picked a "good enough" curve that was simple to implement.
+
+    The attack coefficient uses the same formula, however, the attack time is
+    much shorter than the decay time because the attack curve is sharper.
+
+    The VCF envelope uses the same times as the envelope amplitude but its
+    filter is updated at a lower rate (once every 32 samples), which is why
+    we use a different sample rate in the exponential.
+  */
 
   float param11 = apvts.getRawParameterValue("VCF Att")->load();
   _filterAttack = 1.0f - std::exp(-_inverseUpdateRate * exp(5.5f - 7.5f * param11));
@@ -419,34 +437,48 @@ void JX10AudioProcessor::update()
   float lfoRate = std::exp(7.0f * param19 - 4.0f);
   _lfoInc = lfoRate * _inverseUpdateRate * float(TWOPI);
 
-  // The vibrato / PWM setting is 0.05 for 100% and 0.0 for 0%. You can choose
-  // between PWM mode (to the left) and vibrato mode (to the right).
+  // The vibrato / PWM setting is a parabolic curve that goes from 0.05 for
+  // 100% to 0.0 for 0%. You can choose between PWM mode (to the left) and
+  // vibrato mode (to the right). These values are used as the amplitude of
+  // the LFO sine wave that modulates the oscillator period. In PWM mode, the
+  // oscillators are set up to form a pulse wave with a verying duty cycle.
+  // Note that to get the PWM effect, the oscMix must be larger than 0.
   float param20 = apvts.getRawParameterValue("Vibrato")->load();
   _vibrato = 0.2f * (param20 - 0.5f) * (param20 - 0.5f);
   _pwmDepth = _vibrato;
   if (param20 < 0.5f) { _vibrato = 0.0f; }
 
-  // Noise level. This is a parabola from 0 to 1 (similar to skew = 2 in JUCE).
+  // How much noise to mix into the signal. This is a parabola from 0 to 1
+  // (similar to skew = 2 in JUCE).
   float param21 = apvts.getRawParameterValue("Noise")->load();
   _noiseMix = param21 * param21;
 
-//TODO
+  // When using both oscillators, and/or noise or more filter resonance, the
+  // overall gain increases. This variable tries to compensate for that.
   _volumeTrim = (3.2f - _oscMix - 1.5f * _noiseMix) * (1.5f - 0.5f * param7);
 
   // Lower the noise level so that the maximum is roughly -24 dB.
   _noiseMix *= 0.06f;
-//printf("voltrim %f\n", voltrim);
-//printf("_noiseMix %f\n", _noiseMix);
 
-  // Master tuning. This does 2^(N/12) where N is the number of semitones.
-  // The octave parameter is ±2 octaves, while tuning is ±100%.
-// TODO: what is the -23.376f for?
-// -48.375999 center, so that's 4 octaves lower? but the FFT analyzer does show the correct pitch, so figure out why
+  /*
+    Master tuning. The octave parameter is ±2 octaves, while tuning is ±100%
+    cents. We calculate a multiplier to change the frequency by that amount of
+    tuning. This multiplier is 1.0594^semitones because each semitone of tuning
+    shifts the pitch up or down by 2^1/12 = 1.0594.
+
+    When a note is played, rather than the pitch frequency, we will actually
+    calculate its *period* in samples. That's why `_tune` is multiplied by the
+    sample rate. The higher the tuning, the smaller `_tune` will become because
+    higher notes have smaller periods.
+
+    Why the extra -23.376? Note that if the tuning is 0 octaves and 0 cents,
+    `_tune` is actually -48.376. This offset is used to turn MIDI note numbers
+    into the correct pitch. More about this in noteOn().
+  */
   float param22 = apvts.getRawParameterValue("Octave")->load();
   float param23 = apvts.getRawParameterValue("Tuning")->load();
   _tune = -23.376f - 2.0f * param23 - 12.0f * std::floor(param22 * 4.9f);
   _tune = _sampleRate * std::pow(1.059463094359f, _tune);
-//printf("_tune %f\n", _tune);
 }
 
 void JX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
@@ -487,18 +519,19 @@ void JX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
           case 0x01:  // mod wheel
             // This maps the position of the mod wheel to a parabolic curve
             // starting at 0 (position 0) up to 0.0806 (position 127).
+            // This amount is be added to the LFO intensity for vibrato / PWM.
             _modWheel = 0.000005f * float(data2 * data2);
             break;
 
           case 0x02:  // filter +
           case 0x4A:
-          case 21:    // just for testing
+          case 21:    // TODO for testing
             // Maps the position of the controller from 0 to 2.54.
             _filterCtl = 0.02f * float(data2);
             break;
 
           case 0x03:  // filter -
-          case 22:    // just for testing
+          case 22:    // TODO for testing
             // Maps the position of the controller from 0 to -3.81.
             _filterCtl = -0.03f * float(data2);
             break;
@@ -511,7 +544,7 @@ void JX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
 
           case 0x10:  // resonance
           case 0x47:
-          case 23:    // just for testing
+          case 23:    // TODO for testing
             // This maps the position of the controller to a linear curve
             // from 1.001 (position 0) down to 0.1755 (position 127).
             _resonanceCtl = 0.0065f * float(154 - data2);
@@ -532,7 +565,7 @@ void JX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
           default:  // all notes off
             if (data1 > 0x7A) {
               for (int v = 0; v < NVOICES; ++v) {
-                // Setting its envelope to 0 immediately turns off the voice.
+                // Setting the envelope to 0 immediately turns off the voice.
                 _voices[v].env  = 0.0f;
                 _voices[v].envd = 0.0f;
                 _voices[v].envl = 0.0f;
@@ -564,8 +597,10 @@ void JX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
       // Pitch bend
       case 0xE0:
         // This maps the pitch bend value from [-8192, 8191] to an exponential
-        // curve from 0.89 to 1.12 and its reciprocal (from 1.12 down to 0.89).
-        // When the pitch wheel is centered, both values are 1.0.
+        // curve from 0.89 to 1.12 and its reciprocal from 1.12 down to 0.89.
+        // When the pitch wheel is centered, both values are 1.0. This value
+        // is used to multiply the oscillator period, a shift up or down of 2
+        // semitones (note: 2^(-2/12) = 0.89 and 2^(2/12) = 1.12).
         _inversePitchBend = std::exp(0.000014102 * double(data1 + 128 * data2 - 8192));
         _pitchBend = 1.0f / _inversePitchBend;
         break;
@@ -607,17 +642,23 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
   int event = 0;
   int frame = 0;  // how many samples are already rendered
 
-  const float hpf = 0.997f;
-  const float min = 1.0f;
+  // Q value for the filter. This ranges from 1.0 (no Q) down to 0.0 (full Q).
   const float fq = _filterQ * _resonanceCtl;
+
+  // The SVF filter this synth uses may have stability issues when the cutoff
+  // frequency is too high, so we set an upper limit on the cutoff frequency.
+  // This also depends on the amount of Q. where more Q means the upper limit
+  // is raised, not lowered, as fq becomes smaller then.
   const float fx = 1.97f - 0.85f * fq;
 
   // Calculate the LFO-modulated things. We need to do this at the start of
-  // the block, but also do this every 32 samples inside the loop (see below).
+  // the block, and also do this every 32 samples inside the loop (see below).
   const float sine = std::sin(_lfo);
-  float ff = _filterCutoff + _filterCtl + (_filterLFO + _pressure) * sine;
+  float ff = _filterCutoff + _filterCtl + (_filterLFODepth + _pressure) * sine;
   float pwm = 1.0f + sine * (_modWheel + _pwmDepth);
   float vib = 1.0f + sine * (_modWheel + _vibrato);
+
+//printf("ff %f _filterCutoff %f _filterCtl %f\n", ff, _filterCutoff, _filterCtl);
 
   // Is there at least one active voice, or any pending MIDI event?
   if (_numActiveVoices > 0 || _notes[event] < sampleFrames) {
@@ -673,14 +714,18 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
 
           // The current filter frequency is the combination of the parameter
           // set by the user, the MIDI CC, aftertouch, and the LFO intensity.
-          ff = _filterCutoff + _filterCtl + (_filterLFO + _pressure) * sine;
+          ff = _filterCutoff + _filterCtl + (_filterLFODepth + _pressure) * sine;
 
           // The modulation intensity for vibrato / PWM is set by the parameter
-          // and by the modulation wheel.
+          // and by the modulation wheel. The `pwm` and `vib` values are used
+          // to directly modulate the oscillator period. They are multipliers
+          // that range between 0.869 and 1.131, so that's a bit more than two
+          // semitones up and down. For some reason, the modulation wheel has a
+          // slightly larger range than the vibrato / PWM intensity parameter.
           pwm = 1.0f + sine * (_modWheel + _pwmDepth);
           vib = 1.0f + sine * (_modWheel + _vibrato);
 
-          _lfoStep = LFO_MAX;
+          _lfoStep = LFO_MAX;  // reset the counter
         }
 
         // Loop through all the voices...
@@ -688,38 +733,54 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
           // ...but only render the voices that have an active envelope.
           if (V->env > SILENCE) {
 
-//TODO
-            // Sinc-Loop Oscillator
-            float x1 = V->p + V->dp;
+            // Used by the oscillators.
+            const float hpf = 0.997f;
+            const float min = 1.0f;
+
+            // Oscillator 1. This creates a sinc pulse every `period*2` samples.
+            // This is why in noteOn() we calculate the half period rather than
+            // the full period for the pressed MIDI key's pitch.
+            float x1 = V->p1 + V->dp1;
             if (x1 > min) {
-              if (x1 > V->pmax) {
-                x1 = V->pmax + V->pmax - x1;
-                V->dp = -V->dp;
+              if (x1 > V->pmax1) {
+                x1 = V->pmax1 + V->pmax1 - x1;
+                V->dp1 = -V->dp1;
               }
-              V->p = x1;
-              x1 = V->sin0 * V->sinx - V->sin1;  // sine osc
-              V->sin1 = V->sin0;
-              V->sin0 = x1;
-              x1 = x1 / V->p;
+              V->p1 = x1;
+
+              // Sine oscillator approximation.
+              x1 = V->sin01 * V->sinx1 - V->sin11;
+              V->sin11 = V->sin01;
+              V->sin01 = x1;
+
+              // Sinc function: sin(x) / x.
+              x1 = x1 / V->p1;
             } else {
-              V->p = x1 = - x1;
-              V->dp = V->period * vib * _pitchBend; //set period for next cycle
-              V->pmax = std::floor(0.5f + V->dp) - 0.5f;
-              V->dc = -0.5f * V->lev / V->pmax;
-              V->pmax *= PI;
-              V->dp = V->pmax / V->dp;
-              V->sin0 = V->lev * std::sin(x1);
-              V->sin1 = V->lev * std::sin(x1 - V->dp);
-              V->sinx = 2.0f * std::cos(V->dp);
+              // This is executed the very first time and after every cycle.
+              // Set the period for the next cycle. Even though the period can
+              // be modulated (vibrato, pitch bend, glide), it's only changed
+              // for the next cycle, never in the middle of an ongoing cycle.
+              V->dp1 = V->period * vib * _pitchBend;
+              V->p1 = x1 = -x1;
+              V->pmax1 = std::floor(0.5f + V->dp1) - 0.5f;
+              V->dc1 = -0.5f * V->lev1 / V->pmax1;
+              V->pmax1 *= PI;
+              V->dp1 = V->pmax1 / V->dp1;
+              V->sin01 = V->lev1 * std::sin(x1);
+              V->sin11 = V->lev1 * std::sin(x1 - V->dp1);
+              V->sinx1 = 2.0f * std::cos(V->dp1);
+
+              // Output the peak of the sinc pulse.
               if (x1*x1 > 0.1f) {
-                x1 = V->sin0 / x1;
+                x1 = V->sin01 / x1;
               } else {
-                x1 = V->lev;
+                x1 = V->lev1;
               }
             }
 
-//TODO
-            float x2 = V->p2 + V->dp2;  // osc2
+            // Oscillator 2. This is the same algorithm as for osc 1, except
+            // this uses PWM instead of vibrato, and can be slightly detuned.
+            float x2 = V->p2 + V->dp2;
             if (x2 > min) {
               if (x2 > V->pmax2) {
                 x2 = V->pmax2 + V->pmax2 - x2;
@@ -731,8 +792,8 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
               V->sin02 = x2;
               x2 = x2 / V->p2;
             } else {
-              V->p2 = x2 = - x2;
               V->dp2 = V->period * V->detune * pwm * _pitchBend;
+              V->p2 = x2 = -x2;
               V->pmax2 = std::floor(0.5f + V->dp2) - 0.5f;
               V->dc2 = -0.5f * V->lev2 / V->pmax2;
               V->pmax2 *= PI;
@@ -747,8 +808,22 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
               }
             }
 
-//TODO
-            V->saw = V->saw * hpf + V->dc + x1 - V->dc2 - x2;  // integrated sinc = saw
+            /*
+              By adding up the sinc pulses over time, i.e. integrating them,
+              we create a (bandlimited) saw wave without much aliasing.
+
+              Oscillator 2 is subtracted. In PWM mode, osc 2 is also flipped
+              (and phase-locked with osc 1) to get a pulse wave.
+
+              Note: It can be a little unpredictable how these two oscillators
+              interact. The oscillator state is not reset when an old voice is
+              reused for a new note, and so the phase difference between osc 1
+              and 2 is never the same (I guess that's part of the fun).
+
+              Also, if you don't detune osc 2, it eventually will completely
+              cancel out with osc 1 and you end up with silence.
+            */
+            V->saw = V->saw * hpf + V->dc1 + x1 - V->dc2 - x2;
 
             // Combine the output from the oscillators with the noise.
             float x = V->saw + noise;
@@ -778,9 +853,23 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
                 V->fenvl = _filterSustain;
               }
 
-              //TODO filter freq update
-              fzip += 0.005f * (ff - fzip);  // filter zipper noise filter
-              float y = V->fc * std::exp(fzip + _filterEnv * V->fenv) * _inversePitchBend;  // filter cutoff
+              // Use a basic one-pole smoothing filter to de-zipper changes to
+              // the filter's cutoff frequency as it's being modulated.
+              _filterZip += 0.005f * (ff - _filterZip);
+
+              // Calculate the final filter cutoff by combining the envelope
+              // and the pitch bend.
+              float y = V->fc * std::exp(_filterZip + _filterEnvDepth * V->fenv) * _inversePitchBend;
+
+// TODO
+//y = std::exp(_filterZip);
+
+// note: for Chamberlin, f goes between 0 and 2 (= Nyquist) but is only stable
+// at f < 1 (depending on Q).
+
+//printf("cutoff = %f, max = %f\n", std::asin(y / 2) * getSampleRate() / PI, std::asin(fx / 2) * getSampleRate() / PI);
+
+
               if (y < 0.005f) { y = 0.005f; }
               V->ff = y;
 
@@ -793,7 +882,10 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
 
             if (V->ff > fx) { V->ff = fx; }  // stability limit
 
-            // State-variable filter.
+            // State variable filter. This appears to be a variation on the
+            // Chamberlin SVF. I'm not quite sure where this variation comes
+            // from but no doubt it's done to make the filter behave better at
+            // higher frequencies.
             V->f0 += V->ff * V->f1;
             V->f1 -= V->ff * (V->f0 + fq * V->f1 - x - V->f2);
             V->f1 -= 0.2f * V->f1 * V->f1 * V->f1;  // soft limit
@@ -868,9 +960,12 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
         for (int tmp = NVOICES - 1; tmp > 0; tmp--) {  // queue any held notes
           _voices[tmp].note = _voices[tmp - 1].note;
         }
+
+        // Calculate the period. These formulas are explained below.
         float p = _tune * std::exp(-0.05776226505f * (float(note) + ANALOG * float(v)));
         while (p < 3.0f || (p * _detune) < 3.0f) { p += p; }
         _voices[v].target = p;
+
         if ((_mode & 2) == 0) { _voices[v].period = p; }
         _voices[v].fc = std::exp(_filterVelocitySensitivity * float(velocity - 64)) / p;
         _voices[v].env += SILENCE + SILENCE;  // was missed out below if returned?
@@ -891,38 +986,110 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
 
     // === Calculate pitch ===
 
+    /*
+      The formula below will calculate the period in samples. For example,
+      a 100 Hz tone at 44100 Hz sample rate has a period of 441 samples.
+
+      Note that `p` is actually *half* the period. So, if the tone is 100 Hz,
+      `p` is only 220.5 samples instead of 441. This is simply because of how
+      the oscillators are implemented: one cycle of the waveform consists of a
+      counter counting up for `p` samples and then counting down for another
+      `p` samples. The true cycle length is `p*2` samples.
+
+      How this formula works:
+
+      The typical formula for calculating a pitch in Hz is:
+          freq = 440 * 2^((note - 69)/12)
+
+      We do (note - 69) because 440 Hz is the pitch for A4, which is note 69.
+      If we pull out that factor 2^(-69/12), the formula becomes:
+          freq = 8.1758 * 2^(note/12)
+
+      However, we want a period, not a frequency, so we take the reciprocal:
+          period = sampleRate / (8.1758 * 2^(note/12))
+
+      But we want half the period, so divide by 2:
+          half period = sampleRate / (16.3516 * 2^(note/12))
+
+      We can rewrite this as:
+          half period = (sampleRate / 16.3516) * 2^(-note/12)
+
+      Earlier when we calculated `_tune`, we did:
+          _tune = sampleRate * 1.0594^(semitones)
+
+      We can fold that 1/16.3516 factor into the number of semitones like so:
+
+          1.0594^(semitones) = 2^(semitones/12) = 1 / 16.3516
+          semitones = 12 * log(1/16.3516) / log(2) = -48.376
+
+      So that's where that factor -48.376 comes from. If no tuning is applied,
+      then:
+          _tune = sampleRate * 1.0594^(-48.376)
+
+      When tuning is used, the value of _tune simply becomes smaller or larger
+      depending on the number of semitones we need to shift up or down. Tuning
+      higher means pitches become higher and so the period becomes smaller.
+
+      The formula for the half period can now be written as:
+          half period = _tune * 2^(-note / 12)
+
+      which is the same as:
+          half period = _tune * exp(-0.05776 * note)
+
+      It appears kind of complicated but that's because all the math has been
+      combined into just a couple of formulas.
+
+      The ANALOG term adds a small amount of detuning based on the current
+      voice number. For moar analog!
+    */
+
     float p = _tune * std::exp(-0.05776226505f * (float(note) + ANALOG * float(v)));
+
+    // Make sure the period does not become too small. This essentially lowers
+    // the pitch by an octave at a time until `p` is at least 3 samples long.
     while (p < 3.0f || (p * _detune) < 3.0f) { p += p; }
+
+printf("note %d tune %f _detune %f p %f\n", note, _tune, _detune, p);
+
+    // Set the period as the target that we'll glide to (if glide enabled).
     _voices[v].target = p;
     _voices[v].detune = _detune;
 
+//TODO
     int tmp = 0;
     if (_mode & 2) {
-      if ((_mode & 1) || held) { tmp = note - lastnote; }  // glide
+      if ((_mode & 1) || held) { tmp = note - _lastNote; }  // glide
     }
     _voices[v].period = p * std::pow(1.059463094359f, float(tmp) - _glidedisp);
     if (_voices[v].period < 3.0f) { _voices[v].period = 3.0f; }  // limit min period
 
-    _voices[v].note = lastnote = note;
+    _voices[v].note = _lastNote = note;
 
     // TODO
 
     _voices[v].fc = std::exp(_filterVelocitySensitivity * float(velocity - 64)) / p;  // filter tracking
+//printf("******** %f\n", _voices[v].fc);
 
-    // TODO
+    // The loudness of the tone uses the MIDI velocity but you cannot set the
+    // sensitivity other than on/off. We convert the linear velocity curve into
+    // a parabolic curve that goes from 8.9 (velocity = 1) to 137.924 (v = 127).
+    float vel = 0.004f * float((velocity + 64) * (velocity + 64)) - 8.0f;
 
-    _voices[v].lev = _volumeTrim * _volume * (0.004f * float((velocity + 64) * (velocity + 64)) - 8.0f);
-    _voices[v].lev2 = _voices[v].lev * _oscMix;
+    // Use the different volume controls to set the output level for both
+    // oscillators. This is a value between 0 and 1; even though `vel` is
+    // large-ish, `_volume` is quite small (0.0005 by default).
+    _voices[v].lev1 = _volumeTrim * _volume * vel;
+    _voices[v].lev2 = _voices[v].lev1 * _oscMix;
 
     float param20 = apvts.getRawParameterValue("Vibrato")->load();
     if (param20 < 0.5f) {  // force 180 deg phase difference for PWM
-      if (_voices[v].dp > 0.0f) {
+      if (_voices[v].dp1 > 0.0f) {
 //TODO: he reuses p here which I don't like
-        p = _voices[v].pmax + _voices[v].pmax - _voices[v].p;
-        _voices[v].dp2 = -_voices[v].dp;
+        p = _voices[v].pmax1 + _voices[v].pmax1 - _voices[v].p1;
+        _voices[v].dp2 = -_voices[v].dp1;
       } else {
-        p = _voices[v].p;
-        _voices[v].dp2 = _voices[v].dp;
+        p = _voices[v].p1;
+        _voices[v].dp2 = _voices[v].dp1;
       }
       _voices[v].p2 = _voices[v].pmax2 = p + PI * _voices[v].period;
       _voices[v].dc2 = 0.0f;
@@ -964,9 +1131,11 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
         _voices[v].note = _voices[held].note;
         _voices[held].note = 0;
 
+        // Calculate the period. Same formula as above.
         float p = _tune * std::exp(-0.05776226505f * (float(_voices[v].note) + ANALOG * float(v)));
         while (p < 3.0f || (p * _detune) < 3.0f) { p += p; }
         _voices[v].target = p;
+
         if ((_mode & 2) == 0) { _voices[v].period = p; }
         _voices[v].fc = 1.0f / p;
       } else {
@@ -1026,8 +1195,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout JX10AudioProcessor::createPa
   // It would be nicer to change the parameters to more natural ranges, which
   // JUCE allows us to do. For example, the octave setting could be -2 to +2,
   // rather than having to map [0, 1] to [-2, +2]. However, the factory presets
-  // are specified as 0-1 too and I didn't feel like messing with those. This
-  // is why we're keeping the parameters as they were originally.
+  // are specified as 0 - 1 too and I didn't feel like messing with those.
+  // This is why we're keeping the parameters as they were originally.
 
   layout.add(std::make_unique<juce::AudioParameterFloat>(
     "OSC Mix",
