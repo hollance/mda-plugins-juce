@@ -334,19 +334,22 @@ void JX10AudioProcessor::update()
   // This is 32 times (= LFO_MAX) slower than the sample rate.
   const float _inverseUpdateRate = _inverseSampleRate * LFO_MAX;
 
-//TODO
+  // Just like the envelope, glide is implemented using a one-pole filter that
+  // is updated every 32 samples. Here we set the filter coefficient. A smaller
+  // coefficient means the glide takes longer.
   float param4 = apvts.getRawParameterValue("Gld Rate")->load();
   if (param4 < 0.02f) {
-    _glide = 1.0f;
+    _glideRate = 1.0f;  // no glide
   } else {
-    _glide = 1.0f - std::exp(-_inverseUpdateRate * std::exp(6.0f - 7.0f * param4));
+    _glideRate = 1.0f - std::exp(-_inverseUpdateRate * std::exp(6.0f - 7.0f * param4));
   }
-//printf("_glide %f\n", _glide);
 
+  // Glide bend goes from -36 semitones to +36 semitones. The ^3 is used to
+  // skew the curve so that you can more easily choose small steps (e.g. 0.01
+  // semitones) around the center.
   float param5 = apvts.getRawParameterValue("Gld Bend")->load();
-  _glidedisp = 6.604f * param5 - 3.302f;
-  _glidedisp *= _glidedisp * _glidedisp;
-//printf("_glidedisp %f\n", _glidedisp);
+  _glideBend = 6.604f * param5 - 3.302f;
+  _glideBend *= _glideBend * _glideBend;
 
   // Filter frequency. Convert linearly from [0, 1] to [-1.5, 6.5].
   float param6 = apvts.getRawParameterValue("VCF Freq")->load();
@@ -554,7 +557,9 @@ void JX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
             // Make the variable 64 when the pedal is pressed and 0 when released.
             _sustain = data2 & 0x40;
 
-            // Pedal released? Then end all sustained notes.
+            // Pedal released? Then end all sustained notes. This sends a
+            // note-off event with note = -1, meaning all sustained notes
+            // will be moved into their envelope release stage.
             if (_sustain == 0) {
               _notes[npos++] = deltaFrames;
               _notes[npos++] = SUSTAIN;
@@ -873,10 +878,22 @@ void JX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
               if (y < 0.005f) { y = 0.005f; }
               V->ff = y;
 
-              //TODO
-              V->period += _glide * (V->target - V->period); // glide
+              /*
+                Like so many things in this synth, glide between pitches is
+                implemented as an exponential curve using a simple one-pole
+                smoothing filter. If the voice's current period is not yet
+                equal to the target value, this filter brings it a little
+                closer with every update step.
+
+                We always perform this calculation, even if glide is disabled.
+                In that case, the `_glideRate` is 1, and so the voice's period
+                is immediately set to the target value. (Note that this logic
+                is only performed once every 32 samples, so there could be one
+                or more cycles that get rendered using the old period length).
+              */
+              V->period += _glideRate * (V->target - V->period);
               if (V->target < V->period) {
-                V->period += _glide * (V->target - V->period);
+                V->period += _glideRate * (V->target - V->period);
               }
             }
 
@@ -947,17 +964,24 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
   if (velocity > 0) {  // note on
     if (_ignoreVelocity) { velocity = 80; }
 
-    // === Find voice ===
-
-    float l = 100.0f;  // louder than any envelope!
-    int held = 0;      // how many notes playing
-    int v = 0;
+    int held = 0;  // how many notes playing that are not released yet
+    int v = 0;     // index of the voice to use
 
     if (_mode & 4) {  // monophonic
 
-      // TODO
-      if (_voices[0].note > 0) {  // legato pitch change
-        for (int tmp = NVOICES - 1; tmp > 0; tmp--) {  // queue any held notes
+      // We get here when in MONO, M-LEGATO, or M-GLIDE mode and the user is
+      // playing legato-style, i.e. they pressed a new key before releasing
+      // the previous key or keys.
+      if (_voices[0].note > 0) {
+
+        // Queue any held notes. This puts the previous note values into the
+        // other voices, but it won't actually play these voices. Used during
+        // the next note-off event to determine which note to restore.
+        // For example, if you press and hold E, the synth will play the E.
+        // Then also press F, now the synth will play an F. When you release
+        // the F, the synth sees that E is still held down and it will change
+        // the mono voice to play E again, until that is released too.
+        for (int tmp = NVOICES - 1; tmp > 0; tmp--) {
           _voices[tmp].note = _voices[tmp - 1].note;
         }
 
@@ -966,25 +990,39 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
         while (p < 3.0f || (p * _detune) < 3.0f) { p += p; }
         _voices[v].target = p;
 
+        // Not in M-LEGATO or M-GLIDE? Then no portamento. Otherwise, glide
+        // from whatever was the previous period for this voice. Note that
+        // this does not use the additional glide bend now.
         if ((_mode & 2) == 0) { _voices[v].period = p; }
+
+        // See below for explanations of these.
         _voices[v].fc = std::exp(_filterVelocitySensitivity * float(velocity - 64)) / p;
-        _voices[v].env += SILENCE + SILENCE;  // was missed out below if returned?
+        _voices[v].env += SILENCE + SILENCE;
         _voices[v].note = note;
         return;
       }
 
     } else {  // polyphonic
-      // Replace quietest voice not in attack.
+      float l = 100.0f;  // louder than any envelope!
+
+      // Find a voice to use.
       for (int tmp = 0; tmp < NVOICES; tmp++) {
+        // Count how many playing voices are for keys that are still held down,
+        // i.e. that did not get a note-off event yet. If note is 0, this voice
+        // is not playing; if it's -1, the note is sustained by the pedal.
         if (_voices[tmp].note > 0) { held++; }
+
+        // Replace quietest voice not in attack. Recall that envl is set to 2.0
+        // for the attack portion of the envelope, but for decay and sustain it
+        // is set to the sustain level and for release it is 0.
+        // This will first use any voices that are not playing (env = 0.0).
+        // If all are in use, steal the voice with the lowest envelope value.
         if (_voices[tmp].env < l && _voices[tmp].envl < 2.0f) {
           l = _voices[tmp].env;
           v = tmp;
         }
       }
     }
-
-    // === Calculate pitch ===
 
     /*
       The formula below will calculate the period in samples. For example,
@@ -1045,23 +1083,40 @@ void JX10AudioProcessor::noteOn(int note, int velocity)
 
     float p = _tune * std::exp(-0.05776226505f * (float(note) + ANALOG * float(v)));
 
-    // Make sure the period does not become too small. This essentially lowers
-    // the pitch by an octave at a time until `p` is at least 3 samples long.
+    // Make sure the period does not become too small. This lowers the pitch an
+    // octave at a time until `p` is at least 3 samples long. It seems likely
+    // that this is a requirement of the oscillator algorithm. You can experience
+    // this pitch drop for yourself by playing notes in the highest octave.
     while (p < 3.0f || (p * _detune) < 3.0f) { p += p; }
-
-printf("note %d tune %f _detune %f p %f\n", note, _tune, _detune, p);
 
     // Set the period as the target that we'll glide to (if glide enabled).
     _voices[v].target = p;
     _voices[v].detune = _detune;
 
-//TODO
-    int tmp = 0;
-    if (_mode & 2) {
-      if ((_mode & 1) || held) { tmp = note - _lastNote; }  // glide
+    // In LEGATO or GLIDE mode, perform a portamento from the previous note's
+    // pitch to the new one. The difference between LEGATO and GLIDE is that
+    // GLIDE will always perform the portamento, while LEGATO only does it when
+    // playing legato-style (at least one previous key is still held down).
+    // Note that `_mode & 2` means the mode is 2 or 3 (poly), or 6 or 7 (mono),
+    // which are the LEGATO and GLIDE modes. If `_mode & 1`, then the mode is
+    // 3 or 7, which is only GLIDE. Note that legato-style playing in MONO mode
+    // is handled separately above (regardless of GLIDE or LEGATO modes).
+    int noteDistance = 0;
+    if ((_mode & 2) && ((_mode & 1) || (held > 0))) {
+      noteDistance = note - _lastNote;
     }
-    _voices[v].period = p * std::pow(1.059463094359f, float(tmp) - _glidedisp);
-    if (_voices[v].period < 3.0f) { _voices[v].period = 3.0f; }  // limit min period
+
+    // Make the starting period equal to the period of the previous note (only
+    // in LEGATO or GLIDE modes), but also offset it by an additional amount of
+    // glide bending (± semitones). Note that `_glideBend` is always used, even
+    // if you're not in a LEGATO or GLIDE mode.
+    // This again is the familiar formula 1.0594^semitones or 2^(semitones/12).
+    _voices[v].period = p * std::pow(1.059463094359f, float(noteDistance) - _glideBend);
+
+    // Make sure the starting period does not become too small. Unlike the
+    // target period, this doesn't need to be exact, so we can simply limit
+    // it to the minimum of 3 samples.
+    if (_voices[v].period < 3.0f) { _voices[v].period = 3.0f; }
 
     _voices[v].note = _lastNote = note;
 
@@ -1120,32 +1175,52 @@ printf("note %d tune %f _detune %f p %f\n", note, _tune, _detune, p);
 
   // Note off
   else {
-    if ((_mode & 4) && (_voices[0].note == note)) {  // monophonic (and current note)
+    // In one of the MONO modes and the currently playing note is released?
+    if ((_mode & 4) && (_voices[0].note == note)) {
+
+      // Are there any older notes queued? Note that some of these may have
+      // been released in the mean time, in which case `voice.note` was set
+      // to 0 or SUSTAIN (in the loop in the else clause below).
+      // Notes kept alive only by the sustain pedal are not restored.
       int held = 0;
       int v;
       for (v = NVOICES - 1; v > 0; v--) {
-        if (_voices[v].note > 0) { held = v; }  // any other notes queued?
+        if (_voices[v].note > 0) { held = v; }
       }
-//TODO: does it make sense that we use voices[v] here? isn't that always 0?
+
+      // Did we find an older note whose key is still held down?
       if (held > 0) {
+        // Put this note into voice 0 (note: v is always 0 here).
         _voices[v].note = _voices[held].note;
         _voices[held].note = 0;
 
-        // Calculate the period. Same formula as above.
+        // Calculate the new period based on this note number. These are the
+        // same formulas as above.
         float p = _tune * std::exp(-0.05776226505f * (float(_voices[v].note) + ANALOG * float(v)));
         while (p < 3.0f || (p * _detune) < 3.0f) { p += p; }
         _voices[v].target = p;
 
+        // Don't glide unless in M-LEGATO or M-GLIDE modes.
         if ((_mode & 2) == 0) { _voices[v].period = p; }
+
+// TODO (we don't keep track of velocity)
         _voices[v].fc = 1.0f / p;
       } else {
+        // The last note was released, so turn off the mono voice completely.
         _voices[v].envl  = 0.0f;
         _voices[v].envd  = _envRelease;
         _voices[v].fenvl = 0.0f;
         _voices[v].fenvd = _filterRelease;
         _voices[v].note  = 0;
       }
-    } else {  // polyphonic
+    } else {
+      // We get here in polyphonic mode, or when a key was released that is
+      // not currently playing in monophonic mode.
+
+      // We also get here when the sustain pedal is released. In that case,
+      // the note number is -1 (SUSTAIN). The sustain pedal does not work in
+      // any of the MONO modes, by the way.
+
       for (int v = 0; v < NVOICES; v++) {
         // Any voices playing this note?
         if (_voices[v].note == note) {
@@ -1280,9 +1355,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout JX10AudioProcessor::createPa
     "semi",
     juce::AudioProcessorParameter::genericParameter,
     [](float value, int) {
-      float glidedisp = 6.604f * value - 3.302f;
-      glidedisp *= glidedisp * glidedisp;
-      return juce::String(glidedisp, 2);
+      float semi = 6.604f * value - 3.302f;
+      semi *= semi * semi;
+      return juce::String(semi, 2);
     }));
 
   layout.add(std::make_unique<juce::AudioParameterFloat>(

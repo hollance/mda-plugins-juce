@@ -175,6 +175,7 @@ private:
   // the next update is.
   int _lfoStep;
 
+  // Most recent note that was played. Used for gliding.
   int _lastNote;
 
   // Pseudo random number generator.
@@ -202,7 +203,12 @@ private:
   // Master tuning.
   float _tune;
 
-  float _glide, _glidedisp;
+  // Coefficient for the speed of the glide. 1.0 is instantaneous (no glide).
+  float _glideRate;
+
+  // Number of semitones to glide up or down into any new note. This is used
+  // even if not in a LEGATO or GLIDE mode.
+  float _glideBend;
 
   // Low-pass filter settings.
   float _filterCutoff, _filterQ;
