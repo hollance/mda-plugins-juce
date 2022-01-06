@@ -152,6 +152,13 @@ bool MDAPianoAudioProcessor::isBusesLayoutSupported(const BusesLayout &layouts) 
 
 void MDAPianoAudioProcessor::createPrograms()
 {
+  // Note that the presets store the parameters as values between 0 and 1.
+  // This is because the original plugin was for VST2, which always uses
+  // parameters in that range. Our parameters have different ranges, for
+  // example from -50 to +50 cents, but the underlying normalized values
+  // should still match those from the original version and therefore the
+  // presets still work!
+
   _programs.emplace_back("mda Piano",        0.500f, 0.500f, 0.500f, 0.5f, 0.803f, 0.251f, 0.376f, 0.500f, 0.330f, 0.500f, 0.246f, 0.500f);
   _programs.emplace_back("Plain Piano",      0.500f, 0.500f, 0.500f, 0.5f, 0.751f, 0.000f, 0.452f, 0.000f, 0.000f, 0.500f, 0.000f, 0.500f);
   _programs.emplace_back("Compressed Piano", 0.902f, 0.399f, 0.623f, 0.5f, 1.000f, 0.331f, 0.299f, 0.499f, 0.330f, 0.500f, 0.000f, 0.500f);
