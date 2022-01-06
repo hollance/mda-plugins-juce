@@ -30,14 +30,14 @@ struct JX10Program
 struct Voice
 {
   // What note triggered this voice, or SUSTAIN when the key is released
-  // but the sustain pedal is held down.
+  // but the sustain pedal is held down. 0 if the voice is inactive.
   int note;
 
   // The "period" of the waveform in samples. This is actually only half the
   // period due to the way the oscillators are implemented: they count up for
   // `period` samples and then down for `period` samples.
   float period;   // current period, which may be gliding up to target
-  float target;   // for gliding
+  float target;   // the desired period
 
   // Amount of detuning for osc 2.
   float detune;
@@ -62,11 +62,12 @@ struct Voice
   float dc2;      // dc offset
   float lev2;     // amplitude
 
-  // Used to integrate the outputs from the oscillators to produce a saw wave.
+  // Integrates the outputs from the oscillators to produce a saw wave.
   float saw;
 
-  float fc;      // filter cutoff TODO
-  float ff;      // modulated filter cutoff TODO
+  // Low-pass filter cutoff frequency
+  float fc;      // base coefficient
+  float ff;      // modulated filter cutoff
 
   // Filter delay units
   float f0;      // low-pass output
@@ -165,13 +166,13 @@ private:
   // How many voices are currently in use.
   int _numActiveVoices;
 
-  // Used to smoothen changes in filter cutoff frequency.
+  // Used to smoothen changes in the amount of low-pass filter modulation.
   float _filterZip;
 
   // How often we update the LFO, in samples.
   const int LFO_MAX = 32;
 
-  // The LFO only updates every 32 samples. This counter keep track of when
+  // The LFO only updates every 32 samples. This counter keeps track of when
   // the next update is.
   int _lfoStep;
 
@@ -193,7 +194,8 @@ private:
   int _mode;
 
   // How much oscillator 2 is mixed into the sound; 0.0 = osc 2 is silent,
-  // 1.0 = osc2 has same level as osc 1.
+  // 1.0 = osc2 has same level as osc 1. Note that osc 2 is subtracted, so
+  // if it's not detuned from osc 1, they cancel each other out into silence.
   float _oscMix;
 
   // Amount of detuning for oscillator 2. This is a multiplier for the period
@@ -210,8 +212,15 @@ private:
   // even if not in a LEGATO or GLIDE mode.
   float _glideBend;
 
-  // Low-pass filter settings.
-  float _filterCutoff, _filterQ;
+  // Resonance setting for the low-pass filter.
+  float _filterQ;
+
+  // The "VCF Freq" parameter is used to modulate the low-pass filter's cutoff.
+  // The user does not manually set the cutoff frequency; this is determined by
+  // the note's pitch and velocity. It can be modulated by an envelope and LFO,
+  // and also by "VCF Freq". Lower percentages will reduce the cutoff frequency,
+  // higher precentages will raise it.
+  float _filterMultiplier;
 
   // LFO intensity for the filter cutoff.
   float _filterLFODepth;
@@ -219,7 +228,10 @@ private:
   // Envelope intensity for the filter cutoff.
   float _filterEnvDepth;
 
-  float _filterVelocitySensitivity;
+  // Used to set the low-pass filter's cutoff frequency based on the note's
+  // velocity. There is no velocity sensitivity for the amplitude envelope,
+  // only for the filter cutoff. 0 when velocity is disabled.
+  float _velocitySensitivity;
 
   // If this is set, velocity sensitivity is completely off and all notes will
   // be played with the same velocity.
@@ -260,7 +272,7 @@ private:
   // MIDI CC amount used to modulate the filter Q.
   float _resonanceCtl;
 
-  // Amount of channel aftertouch. This is used to modulate the filter cutoff.
+  // Amount of channel aftertouch. Used to modulate the filter cutoff.
   float _pressure;
 
   // Pitch bend value, and its inverse. Also used to modulate the filter.
