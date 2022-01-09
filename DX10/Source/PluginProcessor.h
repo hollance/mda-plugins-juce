@@ -23,21 +23,28 @@ struct DX10Program
 struct Voice
 {
   // What note triggered this voice, or SUSTAIN when the key is released
-  // but the sustain pedal is held down. 0 if the voice is inactive.
+  // but the sustain pedal is still held down. 0 if the voice is inactive.
   int note;
 
-  float env;  //carrier envelope
-  float dmod; //modulator oscillator
+  // Carrier oscillator
+  float car;   // current phase value
+  float dcar;  // phase increment
+
+  // Modulator sine oscillator
+  float dmod;  // phase increment
   float mod0;
   float mod1;
-  float menv; //modulator envelope
-  float mlev; //modulator target level
-  float mdec; //modulator envelope decay
-  float car;  //carrier oscillator
-  float dcar;
-  float cenv; //smoothed env
-  float catt; //smoothing
-  float cdec; //carrier envelope decay
+
+  // Carrier envelope
+  float env;   // current envelope level
+  float cenv;  // smoothed envelope that includes the attack portion
+  float catt;  // smoothing coefficient for attack
+  float cdec;  // decay mutiplier
+
+  // Modulator envelope
+  float menv;  // current envelope level
+  float mlev;  // target level
+  float mdec;  // decay multiplier
 };
 
 class DX10AudioProcessor : public juce::AudioProcessor,
@@ -125,16 +132,47 @@ private:
   // the next update is.
   int _lfoStep;
 
-  float lfo0, lfo1, MW;
+  // Used by the LFO to approximate a sine wave.
+  float _lfo0, _lfo1;
+
+  // Current amount of mod wheel + vibrato modulation. Because the LFO is only
+  // updated every 100 samples, we need to keep track of this across calls to
+  // processBlock().
+  float _modulationAmount;
 
   // === Parameter values ===
 
-  float tune, rati, ratf, ratio; //modulator ratio
-  float catt, cdec, crel;        //carrier envelope
-  float depth, dept2, mdec, mrel; //modulator envelope
-  float velsens, vibrato;
-  float rich, modmix;
-  float dlfo;
+  // Tuning: number of octaves up or down.
+  float _tune;
+
+  // Fine-tuning: between -1.0 and +1.0 semitones (or -100 to +100 cents).
+  float _fineTune;
+
+  // Modulator ratio as a multiple of the carrier frequency.
+  float _ratio;
+
+  // Carrier envelope settings.
+  float _attack, _decay, _release;
+
+  // Modulator envelope settings.
+  float _modInitialLevel, _modDecay, _modSustain, _modRelease;
+
+  // Velocity sensitivity for the modulator envelope (for brightness).
+  float _velocitySensitivity;
+
+  // The amount of vibrato to apply.
+  float _vibrato;
+
+  // Amount of waveshaping to add extra harmonics.
+  float _richness;
+
+  // How much to mix the modulator waveform into the final sound by itself.
+  // Normally the modulator is only used to change the carrier, but for some
+  // extra snazz you can make the modulator waveform audible as well.
+  float _modMix;
+
+  // Phase increment for the LFO.
+  float _lfoInc;
 
   // === MIDI CC values ===
 
@@ -144,7 +182,7 @@ private:
   // Output gain in linear units. Can be changed by MIDI CC 7.
   float _volume;
 
-  // Modulation wheel value.
+  // Modulation wheel value. Used to add more vibrato.
   float _modWheel;
 
   // Pitch bend value.

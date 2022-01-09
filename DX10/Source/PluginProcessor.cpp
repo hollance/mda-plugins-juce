@@ -1,55 +1,5 @@
 #include "PluginProcessor.h"
 
-
-void protectYourEars(float *buffer, int frameCount) {
-  #ifdef DEBUG
-  bool firstWarning = true;
-  #endif
-  for (int i = 0; i < frameCount; ++i) {
-    float x = buffer[i];
-    bool silence = false;
-    if (std::isnan(x)) {
-      #ifdef DEBUG
-      printf("!!! WARNING: nan detected in audio buffer, silencing !!!\n");
-      #endif
-      silence = true;
-    } else if (std::isinf(x)) {
-      #ifdef DEBUG
-      printf("!!! WARNING: inf detected in audio buffer, silencing !!!\n");
-      #endif
-      silence = true;
-    } else if (x < -2.0f || x > 2.0f) {  // screaming feedback
-      #ifdef DEBUG
-      printf("!!! WARNING: sample out of range (%f), silencing !!!\n", x);
-      #endif
-      silence = true;
-    } else if (x < -1.0f) {
-      #ifdef DEBUG
-      if (firstWarning) {
-        printf("!!! WARNING: sample out of range (%f), clamping !!!\n", x);
-        firstWarning = false;
-      }
-      #endif
-      buffer[i] = -1.0f;
-    } else if (x > 1.0f) {
-      #ifdef DEBUG
-      if (firstWarning) {
-        printf("!!! WARNING: sample out of range (%f), clamping !!!\n", x);
-        firstWarning = false;
-      }
-      #endif
-      buffer[i] = 1.0f;
-    }
-    if (silence) {
-      memset(buffer, 0, frameCount * sizeof(float));
-      return;
-    }
-  }
-}
-
-
-
-
 DX10Program::DX10Program(const char *name,
                          float p0,  float p1,  float p2,  float p3,
                          float p4,  float p5,  float p6,  float p7,
@@ -203,7 +153,7 @@ void DX10AudioProcessor::resetState()
     _voices[v].mod0 = 0.0f;
     _voices[v].mod1 = 0.0f;
     _voices[v].dmod = 0.0f;
-    _voices[v].cdec = 0.99f;  // all notes off
+    _voices[v].cdec = 0.99f;
   }
   _numActiveVoices = 0;
 
@@ -218,72 +168,116 @@ void DX10AudioProcessor::resetState()
 
   // Reset other state.
   _lfoStep = 0;
-  lfo0 = 0.0f;
-  lfo1 = 1.0f;
-  MW = 0.0f;
+  _lfo0 = 0.0f;
+  _lfo1 = 1.0f;
+  _modulationAmount = 0.0f;
 }
 
 void DX10AudioProcessor::update()
 {
+  /*
+    Calculate a multiplier for the pitches of the notes based on the amount of
+    tuning. The number of octaves is -3 to +3. To calculate a multiplier for N
+    semitones, we do `2^(N/12)`. Since an octave has 12 semitones, we can just
+    do `2^(oct)`. Then we multiply this by 8.175 Hz, which is the pitch of the
+    lowest possible note (with MIDI note number 0).
+
+    It's totally not obvious, but there is also an additional factor 2 in here.
+    This is needed for the oscillator algorithm. Instead of [-3, +3] we treat
+    the number of octaves actually as [-2, +4], so `2^(oct)` is always 2x higher.
+    More about why this is done in noteOn().
+
+    We also divide by the sample rate already to save doing this division later
+    when calculating the phase increment for the carrier.
+  */
   float param11 = apvts.getRawParameterValue("Octave")->load();
-  tune = 8.175798915644f * _inverseSampleRate * std::pow(2.0f, std::floor(param11 * 6.9f) - 2.0f);
+  _tune = 8.175798915644f * _inverseSampleRate * std::pow(2.0f, std::floor(param11 * 6.9f) - 2.0f);
 
-  rati = apvts.getRawParameterValue("Coarse")->load();
-  rati = std::floor(40.1f * rati * rati);
+  // Fine-tuning: -100 cents to +100 cents, a value from -1.0 to +1.0.
+  float param12 = apvts.getRawParameterValue("FineTune")->load();
+  _fineTune = param12 + param12 - 1.0f;
 
-  float ratf = apvts.getRawParameterValue("Fine")->load();
-  if (ratf < 0.5f) {
-    ratf = 0.2f * ratf * ratf;
+  // The carrier:modulator ratio is a whole number between 0 and 40.
+  float coarse = apvts.getRawParameterValue("Coarse")->load();
+  coarse = std::floor(40.1f * coarse * coarse);
+
+  // Fine-tuning the c:m ratio is a much smaller number, between 0 and 0.050,
+  // or a fixed ratio picked from a list.
+  float fine = apvts.getRawParameterValue("Fine")->load();
+  if (fine < 0.5f) {
+    fine = 0.2f * fine * fine;
   } else {
-    switch (int(8.9f * ratf)) {
-      case  4: ratf = 0.25f;       break;
-      case  5: ratf = 0.33333333f; break;
-      case  6: ratf = 0.50f;       break;
-      case  7: ratf = 0.66666667f; break;
-      default: ratf = 0.75f;
+    switch (int(8.9f * fine)) {
+      case  4: fine = 0.25f;       break;
+      case  5: fine = 0.33333333f; break;
+      case  6: fine = 0.50f;       break;
+      case  7: fine = 0.66666667f; break;
+      default: fine = 0.75f;
     }
   }
 
-  ratio = 1.570796326795f * (rati + ratf);
+  // The final carrier:modulator ratio combines the coarse and fine settings.
+  // To save some multiplications later the factor PI is already included here.
+  // Note that this uses PI/2, which causes the modulator to be actually at
+  // half the pitch given by the ratio. For example, with Coarse set to 1 and
+  // Fine to 0, the modulator pitch will be half that of the carrier, not equal
+  // to the carrier pitch! (Not sure if this was intentional or a mistake.)
+  _ratio = 1.570796326795f * (coarse + fine);
 
-  float param5 = apvts.getRawParameterValue("Mod Init")->load();
-  depth = 0.0002f * param5 * param5;
+  // Velocity sensitivity: a value between 0 and 1.
+  _velocitySensitivity = apvts.getRawParameterValue("Mod Vel")->load();
 
-  float param7 = apvts.getRawParameterValue("Mod Sus")->load();
-  dept2 = 0.0002f * param7 * param7;
-
-  velsens = apvts.getRawParameterValue("Mod Vel")->load();
-
+  // Vibrato amount: this is a skewed parameter that goes from 0.0 to 0.001.
   float param10 = apvts.getRawParameterValue("Vibrato")->load();
-  vibrato = 0.001f * param10 * param10;
+  _vibrato = 0.001f * param10 * param10;
+
+  // The carrier's envelope is simply a value that gets multiplied by a value
+  // less than one, which means it exponentially decays over time. The attack
+  // is made by exponentially going up rather than down.
 
   float param0 = apvts.getRawParameterValue("Attack")->load();
-  catt = 1.0f - std::exp(-_inverseSampleRate * std::exp(8.0f - 8.0f * param0));
+  _attack = 1.0f - std::exp(-_inverseSampleRate * std::exp(8.0f - 8.0f * param0));
 
   float param1 = apvts.getRawParameterValue("Decay")->load();
   if (param1 > 0.98f) {
-    cdec = 1.0f;
+    _decay = 1.0f;
   } else {
-    cdec = std::exp(-_inverseSampleRate * std::exp(5.0f - 8.0f * param1));
+    _decay = std::exp(-_inverseSampleRate * std::exp(5.0f - 8.0f * param1));
   }
 
   float param2 = apvts.getRawParameterValue("Release")->load();
-  crel = std::exp(-_inverseSampleRate * std::exp(5.0f - 5.0f * param2));
+  _release = std::exp(-_inverseSampleRate * std::exp(5.0f - 5.0f * param2));
+
+  // The modulator envelope does not have an attack but starts out at a given
+  // initial level, then takes decay time to reach the sustain level. As with
+  // the carrier envelope, this is done using a basic smoothing filter.
+
+  float param5 = apvts.getRawParameterValue("Mod Init")->load();
+  _modInitialLevel = 0.0002f * param5 * param5;
 
   float param6 = apvts.getRawParameterValue("Mod Dec")->load();
-  mdec = 1.0f - std::exp(-_inverseSampleRate * std::exp(6.0f - 7.0f * param6));
+  _modDecay = 1.0f - std::exp(-_inverseSampleRate * std::exp(6.0f - 7.0f * param6));
+
+  float param7 = apvts.getRawParameterValue("Mod Sus")->load();
+  _modSustain = 0.0002f * param7 * param7;
 
   float param8 = apvts.getRawParameterValue("Mod Rel")->load();
-  mrel = 1.0f - std::exp(-_inverseSampleRate * std::exp(5.0f - 8.0f * param8));
+  _modRelease = 1.0f - std::exp(-_inverseSampleRate * std::exp(5.0f - 8.0f * param8));
 
+  // The value of this parameter changes the shape of the carrier wave.
+  // At 0%, it's a plain sine wave. At 100%, it's more like a sawtooth.
   float param13 = apvts.getRawParameterValue("Waveform")->load();
-  rich = 0.50f - 3.0f * param13 * param13;
+  _richness = 0.50f - 3.0f * param13 * param13;
 
+  // Modulator mix is a skewed value between 0 and 0.25.
   float param14 = apvts.getRawParameterValue("Mod Thru")->load();
-  modmix = 0.25f * param14 * param14;
+  _modMix = 0.25f * param14 * param14;
 
+  // The LFO rate is between 0 and 25 Hz. This parameter is skewed. The factor
+  // 628.3 in the formula below is 100 * 2 pi, because the LFO is only updated
+  // every 100 samples.
   float param15 = apvts.getRawParameterValue("LFO Rate")->load();
-  dlfo = 628.3f * _inverseSampleRate * 25.0f * param15 * param15;
+  _lfoInc = 628.3f * _inverseSampleRate * 25.0f * param15 * param15;
 }
 
 void DX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
@@ -322,17 +316,15 @@ void DX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
       case 0xB0:
         switch (data1) {
           case 0x01:  // mod wheel
-//TODO: docs
             // This maps the position of the mod wheel to a parabolic curve
-            // starting at 0.0 (position 0) up to 0.0806 (position 127).
-            // This amount is added to the LFO intensity for vibrato / PWM.
+            // starting at 0.0 (position 0) up to 0.000806 (position 127).
+            // This amount is added to the LFO intensity for vibrato.
             _modWheel = 0.00000005f * float(data2 * data2);
             break;
 
           case 0x07:  // volume
-//TODO: docs
             // Map the position of the volume control to a parabolic curve
-            // starting at 0.0 (position 0) up to 0.000806 (position 127).
+            // starting at 0.0 (position 0) up to 0.00564 (position 127).
             _volume = 0.00000035f * float(data2 * data2);
             break;
 
@@ -371,12 +363,10 @@ void DX10AudioProcessor::processEvents(juce::MidiBuffer &midiMessages)
 
       // Pitch bend
       case 0xE0:
-//TODO: docs
-        // This maps the pitch bend value from [-8192, 8191] to an exponential
-        // curve from 0.89 to 1.12 and its reciprocal from 1.12 down to 0.89.
-        // When the pitch wheel is centered, both values are 1.0. This value
-        // is used to multiply the oscillator period, a shift up or down of 2
-        // semitones (note: 2^(-2/12) = 0.89 and 2^(2/12) = 1.12).
+        // This maps the pitch bend value from [-8192, 8191] to [0.89, 1.12]
+        // where 1.0 means the pitch wheel is centered. This value is used to
+        // shift the carrier up or down 2 semitones (since 2^(-2/12) = 0.89
+        // and 2^(2/12) = 1.12).
         _pitchBend = float(data1 + 128 * data2 - 8192);
         if (_pitchBend > 0.0f) {
           _pitchBend = 1.0f + 0.000014951f * _pitchBend;
@@ -419,9 +409,6 @@ void DX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
   float *out1 = buffer.getWritePointer(0);
   float *out2 = buffer.getWritePointer(1);
 
-  const float w = rich;
-  const float m = modmix;
-
   int event = 0;
   int frame = 0;  // how many samples are already rendered
 
@@ -454,10 +441,16 @@ void DX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
 
         // The LFO and any things it modulates are updated every 100 samples.
         if (--_lfoStep < 0) {
-          lfo0 += dlfo * lfo1; //sine LFO
-          lfo1 -= dlfo * lfo0;
-          MW = lfo1 * (_modWheel + vibrato);
-          _lfoStep = 100;
+          // This formula is a simple method to approximate a sine wave, but
+          // it only works for low frequencies such as with an LFO.
+          _lfo0 += _lfoInc * _lfo1;
+          _lfo1 -= _lfoInc * _lfo0;
+
+          // Calculate the new amount of modulation. This value swings between
+          // -0.001806 and +0.001806 and is directly added to the carrier phase.
+          _modulationAmount = _lfo1 * (_modWheel + _vibrato);
+
+          _lfoStep = 100;  // reset counter
         }
 
         // Loop through all the voices...
@@ -466,20 +459,57 @@ void DX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
           float e = V->env;
           if (e > SILENCE) {
 
-            V->env = e * V->cdec; //decay & release
-            V->cenv += V->catt * (e - V->cenv); //attack
+            // The envelope is always decaying.
+            V->env = e * V->cdec;
 
-            float x = V->dmod * V->mod0 - V->mod1; //could add more modulator blocks like
-            V->mod1 = V->mod0;               //this for a wider range of FM sounds
-            V->mod0 = x;
+            // To add an attack to the envelope, apply a smoothing filter that
+            // raises `cenv` from 0.0 to the current envelope level `env`.
+            // The longer the attack, the smaller `catt` and the slower this
+            // filter increments the level. All the while, `env` is decaying
+            // and pulling things downward, so with a long attack the smoothed
+            // envelope `cenv` never gets as high as with a shorter attack.
+            // When the note is released, `catt` is set to 1 so that the attack
+            // ends and `cenv` only decays from that point onwards.
+            V->cenv += V->catt * (e - V->cenv);
+
+            // Simple sine wave oscillator. This creates a sine wave that first
+            // goes down and then goes up, i.e. it has been phase inverted.
+            // The LFO also uses a sine wave oscillator but the one used for
+            // the modulator wave is more reliable at higher frequencies.
+            float y = V->dmod * V->mod0 - V->mod1;
+            V->mod1 = V->mod0;
+            V->mod0 = y;
+
+            // The envelope for the modulator is a simple smoothing filter that
+            // gradually moves from `menv` to the target level `mlev` in an
+            // exponential fashion. Which is what we want because frequencies
+            // are logarithmic, so to move through them at a constant speed we
+            // must move in exponential steps.
             V->menv += V->mdec * (V->mlev - V->menv);
 
-            x = V->car + V->dcar + x * V->menv + MW; //carrier phase
-            while(x >  1.0f) x -= 2.0f;  //wrap phase
-            while(x < -1.0f) x += 2.0f;
+            // Could add more modulator blocks for a wider range of FM sounds.
+            // Most FM synths allow for different configurations but DX10 keeps
+            // it simple with just one modulator.
+
+            // Calculate the new carrier phase. This phase is also changed by
+            // the modulator wave (FM!) and also the mouse wheel and vibrato.
+            float x = V->car + V->dcar + y * V->menv + _modulationAmount;
+
+            // Wrap the phase if it goes out of bounds. Note that modulation
+            // may cause the carrier phase to go backwards.
+            while (x >  1.0f) x -= 2.0f;
+            while (x < -1.0f) x += 2.0f;
             V->car = x;
-            o += V->cenv * (m * V->mod1 + (x + x * x * x * (w * x * x - 1.0f - w)));
-                //amp env //mod thru-mix //5th-order sine approximation
+
+            // Create a 5th-order sine approximation. If you plot this formula,
+            // you'll get a sine-like shape between x = -1 and x = +1. That's
+            // why the carrier phase is restricted to the range [-1, +1].
+            // The richness parameter "distorts" this shape into something that
+            // looks more like a saw wave (which also boosts its amplitude).
+            float s = x + x * x * x * (_richness * x * x - 1.0f - _richness);
+
+            // Mix in the modulator waveform and apply the amplitude envelope.
+            o += V->cenv * (_modMix * V->mod1 + s);
           }
 
           // Go to the next active voice.
@@ -508,7 +538,7 @@ void DX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
         _voices[v].cenv = 0.0f;
         _numActiveVoices--;
       }
-      if (_voices[v].menv < SILENCE) {
+      if (_voices[v].menv < SILENCE) {  // stop modulation envelope
         _voices[v].menv = 0.0f;
         _voices[v].mlev = 0.0f;
       }
@@ -523,15 +553,12 @@ void DX10AudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
 
   // Mark the events buffer as done.
   _notes[0] = EVENTS_DONE;
-
-  protectYourEars(out1, buffer.getNumSamples());
-  protectYourEars(out2, buffer.getNumSamples());
 }
 
 void DX10AudioProcessor::noteOn(int note, int velocity)
 {
   if (velocity > 0) {
-    // Find quietest voice
+    // Find quietest voice. Voices that are not playing have env = 0.
     float l = 1.0f;
     int vl = 0;
     for (int v = 0; v < NVOICES; v++) {
@@ -541,29 +568,96 @@ void DX10AudioProcessor::noteOn(int note, int velocity)
       }
     }
 
-    float param12 = apvts.getRawParameterValue("FineTune")->load();
-    l = std::exp(0.05776226505f * (float(note) + param12 + param12 - 1.0f));
-    _voices[vl].note = note;                         //fine tuning
-    _voices[vl].car  = 0.0f;
-    _voices[vl].dcar = tune * _pitchBend * l; //pitch bend not updated during note as a bit tricky...
+    /*
+      Calculate the pitch for this MIDI note.
 
-    if (l > 50.0f) l = 50.0f;  // key tracking
-    l *= (64.0f + velsens * (velocity - 64)); //vel sens
-    _voices[vl].menv = depth * l;
-    _voices[vl].mlev = dept2 * l;
-    _voices[vl].mdec = mdec;
+      The formula for this is: `440 * 2^((note - 69)/12)`. However, the code
+      below does `exp(0.05776 * note)`, which is equivalent to `2^(note/12)`.
 
-    _voices[vl].dmod = ratio * _voices[vl].dcar; //sine oscillator
+      The note number here is treated as the number of semitones away from the
+      base frequency. Instead of the usual 440 Hz, the base frequency is now
+      of the lowest possible note (MIDI note number 0), which is 8.1757989156.
+      That is why that factor 8.1757989156 is part of the `_tune` variable.
+
+      We also add the amount of fine-tuning to the number of semitones in the
+      formula. Since fine-tuning is ±100 cents, the pitch can go up or down by
+      one additional semitone.
+    */
+    float p = std::exp(0.05776226505f * (float(note) + _fineTune));
+
+    _voices[vl].note = note;
+
+    // Reset the carrier oscillator phase and calculate its phase increment.
+    // Also apply pitch bending here already rather than during rendering,
+    // because apparently that is a bit tricky... which means you can't really
+    // pitch bend the note while it's playing.
+    _voices[vl].car = 0.0f;
+    _voices[vl].dcar = _tune * _pitchBend * p;
+
+    /*
+      Some more details:
+
+      The phase increment `dcar` describes how many samples it takes to count
+      from 0 up to 1. If the pitch is 100 Hz and the sample rate is 44100 Hz,
+      then dcar is 0.002268, so that it takes 441 samples to count from 0 to 1.
+
+      However... `dcar` actually only describes the length of a half period!
+
+      If you look at the computed pitch for the MIDI note number, as given by
+      `_tune * p * sampleRate`, you'll notice it's an octave too high. Since
+      the pitch is 2x higher, the period is half the size of what it should be.
+      (See also the comment in update() where _tune is calculated.)
+
+      Why? In processBlock() the carrier phase value does not go from 0 to 1,
+      but from -1 to +1. This is a distance of 2.0, and so two half-periods
+      make one full period.
+    */
+
+    // Change the modulator's envelope levels based on the note that's played.
+    // We can re-use the pitch for this. If the note is higher than G4, disable
+    // key tracking (not sure why that is done). Keep in mind that the pitch
+    // is p * 8.1757, so p = 50 is 408.8 Hz, which is in between G4 and G#4.
+    if (p > 50.0f) p = 50.0f;
+
+    // Also modify the modulator envelope using velocity. If sensitivity = 0%,
+    // then velocity is always 64. If sensitivity = 100%, then the velocity is
+    // used unchanged. This means p gets multiplied by a value in between 1 and
+    // 127. The max value for p is then 6350; the minimum value is 1.
+    p *= (64.0f + _velocitySensitivity * (velocity - 64));
+
+    // Set the envelope levels for the modulator.
+    _voices[vl].menv = _modInitialLevel * p;
+    _voices[vl].mlev = _modSustain * p;
+    _voices[vl].mdec = _modDecay;
+
+    // The phase increment for the modulator is based on that of the carrier.
+    // As explained elsewhere, since `_ratio` contains the factor PI/2 instead
+    // of PI, the true ratio is actually half the ratio shown in the UI, i.e.
+    // if you choose Coarse = 1 and play a 440 Hz tone, the modulator is 220 Hz.
+    // If ratio is 0, the modulator is disabled.
+    _voices[vl].dmod = _ratio * _voices[vl].dcar;
+
+    // The modulator is a basic sine wave. To create this sine wave, it uses
+    // a simple oscillator algorithm. Here, we initialize the sine oscillator
+    // for the modulator.
     _voices[vl].mod0 = 0.0f;
     _voices[vl].mod1 = std::sin(_voices[vl].dmod);
     _voices[vl].dmod = 2.0f * std::cos(_voices[vl].dmod);
 
-    //scale volume with richness
+    // The carrier envelope starts out at its maximum level and immediately
+    // begins decaying. We set the initial value based on the note velocity
+    // and volume CC. We also scale the level with the richness of the sound,
+    // given by the Waveform parameter, to compensate for the amplitude boost
+    // that the sawtooth shape gives.
     float param13 = apvts.getRawParameterValue("Waveform")->load();
-    _voices[vl].env  = (1.5f - param13) * _volume * (velocity + 10);
-    _voices[vl].catt = catt;
+    _voices[vl].env = (1.5f - param13) * _volume * (velocity + 10);
+    _voices[vl].cdec = _decay;
+
+    // Even though `env` will always be decaying, if an attack is set, we will
+    // need to fade in the voice. `cenv` is derived from `env`, but with attack
+    // applied, and this is the actual envelope level that we'll use.
+    _voices[vl].catt = _attack;
     _voices[vl].cenv = 0.0f;
-    _voices[vl].cdec = cdec;
   }
 
   else {  // note off
@@ -575,11 +669,11 @@ void DX10AudioProcessor::noteOn(int note, int velocity)
       if (_voices[v].note == note) {
         // If the sustain pedal is not pressed, then start envelope release.
         if (_sustain == 0) {
-          _voices[v].cdec = crel; //release phase
+          _voices[v].cdec = _release;
           _voices[v].env  = _voices[v].cenv;
-          _voices[v].catt = 1.0f;
+          _voices[v].catt = 1.0f;  // finish attack, if any
           _voices[v].mlev = 0.0f;
-          _voices[v].mdec = mrel;
+          _voices[v].mdec = _modRelease;
         } else {
           // Sustain pedal is pressed, so put the note in sustain mode.
           _voices[v].note = SUSTAIN;
@@ -673,19 +767,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout DX10AudioProcessor::createPa
     "ratio",
     juce::AudioProcessorParameter::genericParameter,
     [](float value, int) {
-      float ratf = 0.0f;
+      float fine = 0.0f;
       if (value < 0.5f) {
-        ratf = 0.2f * value * value;
+        fine = 0.2f * value * value;
       } else {
         switch (int(8.9f * value)) {
-          case  4: ratf = 0.25f;       break;
-          case  5: ratf = 0.33333333f; break;
-          case  6: ratf = 0.50f;       break;
-          case  7: ratf = 0.66666667f; break;
-          default: ratf = 0.75f;
+          case  4: fine = 0.25f;       break;
+          case  5: fine = 0.33333333f; break;
+          case  6: fine = 0.50f;       break;
+          case  7: fine = 0.66666667f; break;
+          default: fine = 0.75f;
         }
       }
-      return juce::String(ratf, 3);
+      return juce::String(fine, 3);
     }));
 
   layout.add(std::make_unique<juce::AudioParameterFloat>(
