@@ -283,7 +283,7 @@ void JX10AudioProcessor::update()
 
   // Use a lower update rate for the glide and filter envelope, 32 times
   // (= LFO_MAX) slower than the sample rate.
-  const float _inverseUpdateRate = _inverseSampleRate * LFO_MAX;
+  const float inverseUpdateRate = _inverseSampleRate * LFO_MAX;
 
   // Just like the envelope, glide is implemented using a one-pole filter that
   // is updated every 32 samples. Here we set the filter coefficient. A smaller
@@ -292,7 +292,7 @@ void JX10AudioProcessor::update()
   if (param4 < 0.02f) {
     _glideRate = 1.0f;  // no glide
   } else {
-    _glideRate = 1.0f - std::exp(-_inverseUpdateRate * std::exp(6.0f - 7.0f * param4));
+    _glideRate = 1.0f - std::exp(-inverseUpdateRate * std::exp(6.0f - 7.0f * param4));
   }
 
   // Glide bend goes from -36 semitones to +36 semitones. The value is cubed
@@ -364,10 +364,10 @@ void JX10AudioProcessor::update()
   */
 
   float param11 = apvts.getRawParameterValue("VCF Att")->load();
-  _filterAttack = 1.0f - std::exp(-_inverseUpdateRate * exp(5.5f - 7.5f * param11));
+  _filterAttack = 1.0f - std::exp(-inverseUpdateRate * exp(5.5f - 7.5f * param11));
 
   float param12 = apvts.getRawParameterValue("VCF Dec")->load();
-  _filterDecay = 1.0f - std::exp(-_inverseUpdateRate * exp(5.5f - 7.5f * param12));
+  _filterDecay = 1.0f - std::exp(-inverseUpdateRate * exp(5.5f - 7.5f * param12));
 
   // The sustain level for the filter envelope is exponential(ish) because
   // frequencies are logarithmic.
@@ -375,7 +375,7 @@ void JX10AudioProcessor::update()
   _filterSustain = param13 * param13;
 
   float param14 = apvts.getRawParameterValue("VCF Rel")->load();
-  _filterRelease = 1.0f - std::exp(-_inverseUpdateRate * std::exp(5.5f - 7.5f * param14));
+  _filterRelease = 1.0f - std::exp(-inverseUpdateRate * std::exp(5.5f - 7.5f * param14));
 
   float param15 = apvts.getRawParameterValue("ENV Att")->load();
   _envAttack = 1.0f - std::exp(-_inverseSampleRate * std::exp(5.5f - 7.5f * param15));
@@ -395,7 +395,7 @@ void JX10AudioProcessor::update()
   // a sine wave running at 1/32th the sample rate.
   float param19 = apvts.getRawParameterValue("LFO Rate")->load();
   float lfoRate = std::exp(7.0f * param19 - 4.0f);
-  _lfoInc = lfoRate * _inverseUpdateRate * float(TWOPI);
+  _lfoInc = lfoRate * inverseUpdateRate * float(TWOPI);
 
   // The vibrato / PWM setting is a parabolic curve going from 0.0 for 0% up to
   // 0.05 for 100%. You can choose between PWM mode (to the left) and vibrato
