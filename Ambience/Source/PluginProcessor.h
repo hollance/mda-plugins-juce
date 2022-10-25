@@ -2,77 +2,69 @@
 
 #include <JuceHeader.h>
 
-class MDAAmbienceAudioProcessor : public juce::AudioProcessor,
-                                  private juce::ValueTree::Listener
+class MDAAmbienceAudioProcessor : public juce::AudioProcessor
 {
 public:
-  MDAAmbienceAudioProcessor();
-  ~MDAAmbienceAudioProcessor() override;
+    MDAAmbienceAudioProcessor();
+    ~MDAAmbienceAudioProcessor() override;
 
-  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-  void releaseResources() override;
-  void reset() override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void reset() override;
 
-  bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
+    bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-  void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
+    void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
 
-  juce::AudioProcessorEditor *createEditor() override;
-  bool hasEditor() const override { return true; }
+    juce::AudioProcessorEditor *createEditor() override;
+    bool hasEditor() const override { return true; }
 
-  const juce::String getName() const override;
+    const juce::String getName() const override;
 
-  bool acceptsMidi() const override { return false; }
-  bool producesMidi() const override { return false; }
-  bool isMidiEffect() const override { return false; }
-  double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
-  int getNumPrograms() override;
-  int getCurrentProgram() override;
-  void setCurrentProgram(int index) override;
-  const juce::String getProgramName(int index) override;
-  void changeProgramName(int index, const juce::String &newName) override;
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String &newName) override;
 
-  void getStateInformation(juce::MemoryBlock &destData) override;
-  void setStateInformation(const void *data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock &destData) override;
+    void setStateInformation(const void *data, int sizeInBytes) override;
 
-  juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
+    juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
 
 private:
-  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override
-  {
-    _parametersChanged.store(true);
-  }
+    void update();
+    void resetState();
 
-  std::atomic<bool> _parametersChanged { false };
+    void flushBuffers();
 
-  void update();
-  void resetState();
+    // Delay lines. The maximum length of these is hardcoded to 1024 samples.
+    float *_buf1, *_buf2, *_buf3, *_buf4;
 
-  void flushBuffers();
+    // Read position in the delay buffers.
+    int _pos;
 
-  // Delay lines. The maximum length of these is hardcoded to 1024 samples.
-  float *_buf1, *_buf2, *_buf3, *_buf4;
+    // This sets the length of the delays.
+    float _size;
 
-  // Read position in the delay buffers.
-  int _pos;
+    // Feedback coefficient for the allpass filters.
+    float _feedback;
 
-  // This sets the length of the delays.
-  float _size;
+    // Low-pass filter coefficient for HF damping.
+    float _damp;
 
-  // Feedback coefficient for the allpass filters.
-  float _feedback;
+    // Low-pass filter state value.
+    float _filter;
 
-  // Low-pass filter coefficient for HF damping.
-  float _damp;
+    // Wet/dry mix.
+    float _wet, _dry;
 
-  // Low-pass filter state value.
-  float _filter;
-
-  // Wet/dry mix.
-  float _wet, _dry;
-
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MDAAmbienceAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MDAAmbienceAudioProcessor)
 };

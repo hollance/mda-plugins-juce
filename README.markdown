@@ -1,6 +1,6 @@
 # MDA plug-ins in JUCE
 
-This repo contains the [MDA freeware plug-ins](http://mda.smartelectronix.com) implemented in [JUCE](https://juce.com). 
+This repo contains the [MDA freeware plug-ins](http://mda.smartelectronix.com) implemented in [JUCE](https://juce.com).
 
 The [original plug-in source code](https://sourceforge.net/projects/mda-vst/) is for VST2, which is no longer supported. For my own elucidation and enjoyment, I decided to rewrite these plug-ins in JUCE.
 
@@ -8,7 +8,7 @@ The MDA plug-ins were originally written by Paul Kellett, about two decades ago.
 
 These source examples are provided mainly for **learning purposes**! As Paul said of his original source code release:
 
-> This code is definitely not an example of how to write plug-ins! It's obvious that I didn't know much C++ when I started, and some of the optimizations might have worked on a 486 processor but are not relevant today.  The code is very raw with no niceties like parameter de-zipping, but maybe you'll find some useful stuff in there.  
+> This code is definitely not an example of how to write plug-ins! It's obvious that I didn't know much C++ when I started, and some of the optimizations might have worked on a 486 processor but are not relevant today.  The code is very raw with no niceties like parameter de-zipping, but maybe you'll find some useful stuff in there.
 
 I've tried to fix some of these issues but did not add any new features such as the parameter dezipping. The code here is 20 years old, so it may no longer be the most optimal way to implement these algorithms. Consider this project to be a kind of plug-in archeology. ;-)
 
@@ -95,7 +95,7 @@ This was the first "mda" effect, made way back in 1998.  It is a simple ring mod
 
 Shepard tone generator
 
-This plug-in generates a continuously rising or falling tone.  Or rather, that's what it sounds like but really new harmonics are always appearing at one end of the spectrum and disappearing at the other. (Using some EQ can improve the psychoacoustic effect, depending on your listening environment.) 
+This plug-in generates a continuously rising or falling tone.  Or rather, that's what it sounds like but really new harmonics are always appearing at one end of the spectrum and disappearing at the other. (Using some EQ can improve the psychoacoustic effect, depending on your listening environment.)
 
 These continuous tones are actually called "Risset tones", developed from the earlier "Shepard tones" which change in series of discrete steps. The Mode control allows the input signal to be mixed or ring modulated with the tone - this works well as one element of a complex chain of effects.
 
@@ -118,19 +118,19 @@ Note: the AU version of this plug-in has a bunch of extra features and improveme
 ## Plug-ins that have not been converted yet
 
 - Bandisto - Multi-band distortion
-- BeatBox - Drum replacer 
+- BeatBox - Drum replacer
 - Combo - Amp & speaker simulator
 - De-ess - High frequency dynamics processor
 - Detune - Simple up/down pitch shifting thickener
-- Dither - Range of dither types including noise shaping 
+- Dither - Range of dither types including noise shaping
 - DubDelay - Delay with feedback saturation and time/pitch modulation
 - Dynamics - Compressor / Limiter / Gate
 - Envelope - Envelope follower / VCA
 - Image - Stereo image adjustment and M-S matrix
 - Leslie - Rotary speaker simulator
 - Looplex - ?
-- Loudness - Equal loudness contours for bass EQ and mix correction 
-- Multiband - Multi-band compressor with M-S processing modes 
+- Loudness - Equal loudness contours for bass EQ and mix correction
+- Multiband - Multi-band compressor with M-S processing modes
 - Re-Psycho! - Drum loop pitch changer
 - RezFilter - Resonant filter with LFO and envelope follower
 - Round Panner - 3D panner
@@ -155,12 +155,12 @@ The main functions in PluginProcessor are:
 - `createParameterLayout()`: this is where the parameters are defined
 - `prepareToPlay()`: initializes the plug-in
 - `resetState()`: sets things back to zero, clears out any delay lines, and so on. This method is called when the plug-in is initialized in `prepareToPlay` but also when the plug-in is `reset`.
-- `update()`: takes the current parameter values and recomputes whatever depends on these parameters. This method is called from `processBlock` but only when parameters have actually changed. 
+- `update()`: takes the current parameter values and recomputes whatever depends on these parameters. This method is called from `processBlock` but only when parameters have actually changed.
 - `processBlock()`: does the actual audio processing
 
-The PluginProcessor has a number of member variables. Their names begin with an underscore, such as `_level`. There are basically two types of member variables: 
+The PluginProcessor has a number of member variables. Their names begin with an underscore, such as `_level`. There are basically two types of member variables:
 
-1. "cooked" parameters 
+1. "cooked" parameters
 2. rendering state
 
 The cooked parameters are filled in by the `update()` method. This reads the current parameter values from the APVTS and then puts the cooked version into the member variable. For example:
@@ -168,31 +168,31 @@ The cooked parameters are filled in by the `update()` method. This reads the cur
 ```c++
 void MDARingModAudioProcessor::update()
 {
-  // Convert from decibels into a linear gain value.
-  float level = apvts.getRawParameterValue("Level")->load();
-  _level = juce::Decibels::decibelsToGain(level);
+    // Convert from decibels into a linear gain value.
+    float level = apvts.getRawParameterValue("Level")->load();
+    _level = juce::Decibels::decibelsToGain(level);
 }
 ```
 
-The `update()` method is called by the audio thread at the start of `processBlock()`. To be a bit more efficient, this only happens when any of the parameters have actually been changed by the user or by the host through automation. After all, if the parameters didn't change then calling `update()` again will not change any of these member variables either. 
+The `update()` method is called by the audio thread at the start of `processBlock()`. To be a bit more efficient, this only happens when any of the parameters have actually been changed by the user or by the host through automation. After all, if the parameters didn't change then calling `update()` again will not change any of these member variables either.
 
 This is managed by an `atomic<bool>` variable. The PluginProcessor is a `ValueTree::Listener` that listens to changes in the `AudioProcessorValueTreeState` that holds all the parameters. When a parameter gets a new value, this listener sets `_parametersChanged` to true. The audio thread will call `update()` only if it sees this boolean is true. This approach is probably overkill for most of these plug-ins but it's how I generally structure this.
 
 The second type of variable keeps track of rendering state. This is something like the current phase of an oscillator or the delay unit of a filter. These variables are given their initial value by `resetState()` and will be changed by `processBlock`.
 
-Inside `processBlock()` we first read the member variables into local variables (for state) or constants (for parameters). Then the processing loop uses these local variables instead of the member variables. If the audio processing loop updates any of the state (which it usually does), the latest values get copied back into the corresponding member variables after the loop. This is how the original plug-ins did it, and I kept the same approach.
+Inside `processBlock()` we first read the member variables into local variables (for state) or constants (for parameters). Then the processing loop uses these local variables instead of the member variables. If the audio processing loop updates any of the state (which it usually does), the latest values get copied back into the corresponding member variables after the loop. This is how the original plug-ins did it and I kept the same approach.
 
-## Conversion notes
+## Parameter calculations
 
 The MDA plug-ins were VST2, meaning that the parameters are always 0 - 1. Since JUCE allows us to have parameters in any range, they were changed to whatever felt more more natural (in dB, Hz, etc).
 
-Let's say the plug-in defines an Output Level parameter. Like all VST2 parameters, this has a range of 0 - 1. But in the UI we want to display this as decibels. The `getParameterDisplay()` function converts this 0 - 1 into a decibel value:
+Let's say the plug-in defines an Output Level parameter. Like all VST2 parameters, this has a range of 0 - 1. But in the UI we want to display this as decibels. In the original code, the `getParameterDisplay()` function converted this 0 - 1 into a decibel value:
 
 ```c++
 int2strng((VstInt32)(40.0 * fParam - 20.0), text);
 ```
 
-Here, `fParam` is the 0 - 1 value. So this will show a range of -20 dB (when `fParam = 0`) to +20 dB (when `fParam = 1`). Note that this `getParameterDisplay()` function is only used for drawing the UI, not for anything else.
+Here, `fParam` is the 0 - 1 value. The formula used here will show a range from -20 dB (when `fParam = 0`) to +20 dB (when `fParam = 1`). Note that this `getParameterDisplay()` function is only used for drawing the UI, not for anything else.
 
 In the audio processing code, the parameter is still 0 - 1. This value, which represents a range of decibels, is converted into a linear gain so that we can multiply it with the audio.
 
@@ -238,11 +238,13 @@ Rather than deriving this from `fParam0` directly, it takes the computed delay i
 
 In the JUCE version, I replaced this by a parameter that lets you directly choose the delay time in milliseconds, which seemed like a simpler approach. Instead of going from 0 - 1, the parameter goes to 0 to 500 ms. Makes sense, right?
 
-However, recall that the audio processing logic squares the parameter value in the formula `size * fParam0 * fParam0`. Since that parameter goes from 0 - 1, this creates a nice little x^2 curve. I think this was done to make it easier to pick smaller delays. For example, at a sample rate of 44100, the maximum delay length is 22050 samples. With the parameter set to 0.5, the delay is not 11025 (= half) but 5512 samples (= half squared). It makes the slider non-linear, which is usually what you want for times and frequencies.
+However, recall that the audio processing logic squares the parameter value in the formula `size * fParam0 * fParam0`. Since that parameter goes from 0 - 1, this creates a nice little x^2 curve. This kind of thing is usually done to make it easier to pick smaller delays. For example, at a sample rate of 44100, the maximum delay length is 22050 samples. With the parameter set to 0.5, the delay is not 11025 (= half) but 5512 samples (= half squared). It makes the slider non-linear, which is what you want for things like times and frequencies.
 
-But we are not working with a normalized value from 0 - 1 anymore, our parameter is in milliseconds already. Squaring that number doesn't make any sense. We also can't solve this by dividing the chosen time by the maximum delay time to normalize it, and then squaring that number. Our slider for the delay time is linear and squaring the normalized value would actually give a different delay than the slider shows.
+But we are not working with a normalized value from 0 - 1 anymore, our parameter is in milliseconds already. Squaring that number doesn't make any sense.
 
-The correct solution is to calculate the delay time linearly, without squaring the parameter:
+Remember that squaring was only done to make the slider work more logarithmically, giving more room to smaller delays than to larger delays. In JUCE, we can achieve this by giving the slider a skew factor. Now our slider is non-linear too, just like in the original plug-in. But we don't have to do any of the math for it ourselves, JUCE takes care of this for us.
+
+We can simply calculate the delay time linearly, without squaring the parameter:
 
 ```c++
 const float samplesPerMsec = float(getSampleRate()) / 1000.0f;
@@ -250,7 +252,19 @@ float ldelParam = apvts.getRawParameterValue("L Delay")->load();  // 0 - 500 ms
 ldel = int(ldelParam * samplesPerMsec);
 ```
 
-Remember that squaring was only done to make the slider work more logarithmically, giving more room to smaller delays than to larger delays. In JUCE, we can achieve this by giving the slider a skew factor. Now our slider is non-linear too, just like in the original plug-in. But we don't have to do any of the math for it ourselves --- JUCE takes care of this for us.
+## Denormals
+
+Many plug-ins have code to flush denormals, for example like the following. This sets the variable to zero if the number becomes too small:
+
+```c++
+if (std::abs(f) > 1.0e-10f) {
+    _filter = f;
+} else {
+    _filter = 0.0f;
+}
+```
+
+I left this code in the plug-in even though it is not strictly necessary, as we use `juce::ScopedNoDenormals` to automatically flush denormals to zero.
 
 ## TODO
 
