@@ -2,86 +2,78 @@
 
 #include <JuceHeader.h>
 
-class MDADegradeAudioProcessor : public juce::AudioProcessor,
-                                 private juce::ValueTree::Listener
+class MDADegradeAudioProcessor : public juce::AudioProcessor
 {
 public:
-  MDADegradeAudioProcessor();
-  ~MDADegradeAudioProcessor() override;
+    MDADegradeAudioProcessor();
+    ~MDADegradeAudioProcessor() override;
 
-  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-  void releaseResources() override;
-  void reset() override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void reset() override;
 
-  bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
+    bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-  void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
+    void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
 
-  juce::AudioProcessorEditor *createEditor() override;
-  bool hasEditor() const override { return true; }
+    juce::AudioProcessorEditor *createEditor() override;
+    bool hasEditor() const override { return true; }
 
-  const juce::String getName() const override;
+    const juce::String getName() const override;
 
-  bool acceptsMidi() const override { return false; }
-  bool producesMidi() const override { return false; }
-  bool isMidiEffect() const override { return false; }
-  double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
-  int getNumPrograms() override;
-  int getCurrentProgram() override;
-  void setCurrentProgram(int index) override;
-  const juce::String getProgramName(int index) override;
-  void changeProgramName(int index, const juce::String &newName) override;
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String &newName) override;
 
-  void getStateInformation(juce::MemoryBlock &destData) override;
-  void setStateInformation(const void *data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock &destData) override;
+    void setStateInformation(const void *data, int sizeInBytes) override;
 
-  juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
+    juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
 
 private:
-  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override
-  {
-    _parametersChanged.store(true);
-  }
+    void update();
+    float filterFreq(float hz);
+    void resetState();
 
-  std::atomic<bool> _parametersChanged { false };
+    // To reduce the sampling rate, we only read from the input buffer every
+    // sampleInterval samples.
+    int _sampleInterval, _sampleIndex;
 
-  void update();
-  float filterFreq(float hz);
-  void resetState();
+    // This is 1.0 if sample-and-hold mode is active, 0.0 if not.
+    float _mode;
 
-  // To reduce the sampling rate, we only read from the input buffer every
-  // sampleInterval samples.
-  int _sampleInterval, _sampleIndex;
+    // Used to perform quantizing.
+    float _g1, _g2;
 
-  // This is 1.0 if sample-and-hold mode is active, 0.0 if not.
-  float _mode;
+    // Non-linearity values for negative and positive samples.
+    float _linNeg, _linPos;
 
-  // Used to perform quantizing.
-  float _g1, _g2;
+    // Level for headroom clipping.
+    float _clip;
 
-  // Non-linearity values for negative and positive samples.
-  float _linNeg, _linPos;
+    // Output gain.
+    float _g3;
 
-  // Level for headroom clipping.
-  float _clip;
+    // Filter coefficients.
+    float _fi, _fo;
 
-  // Output gain.
-  float _g3;
+    // Sum of the previous samples in sample-and-hold mode.
+    float _accum;
 
-  // Filter coefficients.
-  float _fi, _fo;
+    // The most recently computed sample value, before filtering.
+    float _currentSample;
 
-  // Sum of the previous samples in sample-and-hold mode.
-  float _accum;
+    // Delay units for the 8 filter stages.
+    float _buf1, _buf2, _buf3, _buf4, _buf6, _buf7, _buf8, _buf9;
 
-  // The most recently computed sample value, before filtering.
-  float _currentSample;
-
-  // Delay units for the 8 filter stages.
-  float _buf1, _buf2, _buf3, _buf4, _buf6, _buf7, _buf8, _buf9;
-
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MDADegradeAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MDADegradeAudioProcessor)
 };
