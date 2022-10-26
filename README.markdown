@@ -19,7 +19,7 @@ Some notes:
 - The code has been cleaned up a bit and documented, and occasionally bug fixed.
 - These plug-ins have no UI and use the default generic JUCE UI.
 - I'm not using the JUCE coding style because it's ugly. ;-)
-- The code has only been tested with Xcode on a Mac using JUCE 6.1, but should work on Windows too.
+- The code has only been tested with Xcode on a Mac using JUCE 7, but should work on Windows too.
 
 This source code is licensed under the [MIT license](LICENSE.txt) but keep in mind that JUCE has its own licensing terms. JUCE conversion done by Matthijs Hollemans.
 
@@ -150,6 +150,8 @@ Each plug-in is in its own folder. Go into the folder, open the **.jucer** file 
 
 Since there is no UI for these plug-ins, the only source files are **PluginProcessor.h** and **.cpp**.
 
+### PluginProcessor
+
 The main functions in PluginProcessor are:
 
 - `createParameterLayout()`: this is where the parameters are defined
@@ -158,12 +160,14 @@ The main functions in PluginProcessor are:
 - `update()`: takes the current parameter values and recomputes whatever depends on these parameters. This method is called from `processBlock` but only when parameters have actually changed.
 - `processBlock()`: does the actual audio processing
 
-The PluginProcessor has a number of member variables. Their names begin with an underscore, such as `_level`. There are basically two types of member variables:
+The PluginProcessor has a number of member variables. Their names begin with an underscore, such as `_level`.
+
+There are two types of member variables:
 
 1. "cooked" parameters
 2. rendering state
 
-The cooked parameters are filled in by the `update()` method. This reads the current parameter values from the APVTS and then puts the cooked version into the member variable. For example:
+The cooked parameters are filled in by the `update()` method. This method is called by the audio thread at the start of `processBlock()`.  It reads the current parameter values from the APVTS and then puts the cooked version into the member variable. For example:
 
 ```c++
 void MDARingModAudioProcessor::update()
@@ -174,15 +178,11 @@ void MDARingModAudioProcessor::update()
 }
 ```
 
-The `update()` method is called by the audio thread at the start of `processBlock()`. To be a bit more efficient, this only happens when any of the parameters have actually been changed by the user or by the host through automation. After all, if the parameters didn't change then calling `update()` again will not change any of these member variables either.
-
-This is managed by an `atomic<bool>` variable. The PluginProcessor is a `ValueTree::Listener` that listens to changes in the `AudioProcessorValueTreeState` that holds all the parameters. When a parameter gets a new value, this listener sets `_parametersChanged` to true. The audio thread will call `update()` only if it sees this boolean is true. This approach is probably overkill for most of these plug-ins but it's how I generally structure this.
-
 The second type of variable keeps track of rendering state. This is something like the current phase of an oscillator or the delay unit of a filter. These variables are given their initial value by `resetState()` and will be changed by `processBlock`.
 
-Inside `processBlock()` we first read the member variables into local variables (for state) or constants (for parameters). Then the processing loop uses these local variables instead of the member variables. If the audio processing loop updates any of the state (which it usually does), the latest values get copied back into the corresponding member variables after the loop. This is how the original plug-ins did it and I kept the same approach.
+Inside `processBlock()` we first read the member variables into local variables (for state) or constants (for parameters). Then the processing loop uses these local variables instead of the member variables. If the audio processing loop updates any of the state (which it usually does), the latest values get copied back into the corresponding member variables after the loop. I'm not sure how useful it is to copy the member variables into local variables, since both will be implemented as a load from a register using an offset, but this is how the original plug-ins did it.
 
-## Parameter calculations
+### Parameter calculations
 
 The MDA plug-ins were VST2, meaning that the parameters are always 0 - 1. Since JUCE allows us to have parameters in any range, they were changed to whatever felt more more natural (in dB, Hz, etc).
 
@@ -252,7 +252,7 @@ float ldelParam = apvts.getRawParameterValue("L Delay")->load();  // 0 - 500 ms
 ldel = int(ldelParam * samplesPerMsec);
 ```
 
-## Denormals
+### Denormals
 
 Many plug-ins have code to flush denormals, for example like the following. This sets the variable to zero if the number becomes too small:
 
@@ -265,9 +265,3 @@ if (std::abs(f) > 1.0e-10f) {
 ```
 
 I left this code in the plug-in even though it is not strictly necessary, as we use `juce::ScopedNoDenormals` to automatically flush denormals to zero.
-
-## TODO
-
-Possible issues:
-
-- Investigate how useful it is to copy member variables into local variables in processBlock. I'm not sure it actually results in a speed gain, since both will be implemented as a load from a register using an offset. But maybe telling the compiler that certain values are considered const is still beneficial. Need to look into the generated assembly to make sure.
