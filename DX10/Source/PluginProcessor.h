@@ -2,191 +2,183 @@
 
 #include <JuceHeader.h>
 
-#define NPARAMS 16       // number of parameters
-#define NVOICES 8        // max polyphony
+const int NPARAMS = 16;       // number of parameters
+const int NVOICES = 8;        // max polyphony
 
-#define SILENCE 0.0003f  // voice choking
+const float SILENCE = 0.0003f;  // voice choking
 
 // Describes a factory preset.
 struct DX10Program
 {
-  DX10Program(const char *name,
-              float p0,  float p1,  float p2,  float p3,
-              float p4,  float p5,  float p6,  float p7,
-              float p8,  float p9,  float p10, float p11,
-              float p12, float p13, float p14, float p15);
-  char name[24];
-  float param[NPARAMS];
+    DX10Program(const char *name,
+                float p0,  float p1,  float p2,  float p3,
+                float p4,  float p5,  float p6,  float p7,
+                float p8,  float p9,  float p10, float p11,
+                float p12, float p13, float p14, float p15);
+    char name[24];
+    float param[NPARAMS];
 };
 
 // State for an active voice.
 struct Voice
 {
-  // What note triggered this voice, or SUSTAIN when the key is released
-  // but the sustain pedal is still held down. 0 if the voice is inactive.
-  int note;
+    // What note triggered this voice, or SUSTAIN when the key is released
+    // but the sustain pedal is still held down. 0 if the voice is inactive.
+    int note;
 
-  // Carrier oscillator
-  float car;   // current phase value
-  float dcar;  // phase increment
+    // Carrier oscillator
+    float car;   // current phase value
+    float dcar;  // phase increment
 
-  // Modulator sine oscillator
-  float dmod;  // phase increment
-  float mod0;
-  float mod1;
+    // Modulator sine oscillator
+    float dmod;  // phase increment
+    float mod0;
+    float mod1;
 
-  // Carrier envelope
-  float env;   // current envelope level
-  float cenv;  // smoothed envelope that includes the attack portion
-  float catt;  // smoothing coefficient for attack
-  float cdec;  // decay mutiplier
+    // Carrier envelope
+    float env;   // current envelope level
+    float cenv;  // smoothed envelope that includes the attack portion
+    float catt;  // smoothing coefficient for attack
+    float cdec;  // decay mutiplier
 
-  // Modulator envelope
-  float menv;  // current envelope level
-  float mlev;  // target level
-  float mdec;  // decay multiplier
+    // Modulator envelope
+    float menv;  // current envelope level
+    float mlev;  // target level
+    float mdec;  // decay multiplier
 };
 
-class DX10AudioProcessor : public juce::AudioProcessor,
-                           private juce::ValueTree::Listener
+class DX10AudioProcessor : public juce::AudioProcessor
 {
 public:
-  DX10AudioProcessor();
-  ~DX10AudioProcessor() override;
+    DX10AudioProcessor();
+    ~DX10AudioProcessor() override;
 
-  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-  void releaseResources() override;
-  void reset() override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void reset() override;
 
-  bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
+    bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-  void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
+    void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
 
-  juce::AudioProcessorEditor *createEditor() override;
-  bool hasEditor() const override { return true; }
+    juce::AudioProcessorEditor *createEditor() override;
+    bool hasEditor() const override { return true; }
 
-  const juce::String getName() const override;
+    const juce::String getName() const override;
 
-  bool acceptsMidi() const override { return true; }
-  bool producesMidi() const override { return false; }
-  bool isMidiEffect() const override { return false; }
-  double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
-  int getNumPrograms() override;
-  int getCurrentProgram() override;
-  void setCurrentProgram(int index) override;
-  const juce::String getProgramName(int index) override;
-  void changeProgramName(int index, const juce::String &newName) override;
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String &newName) override;
 
-  void getStateInformation(juce::MemoryBlock &destData) override;
-  void setStateInformation(const void *data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock &destData) override;
+    void setStateInformation(const void *data, int sizeInBytes) override;
 
-  juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
+    juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
 
 private:
-  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override
-  {
-    _parametersChanged.store(true);
-  }
+    void update();
+    void resetState();
 
-  std::atomic<bool> _parametersChanged { false };
+    void createPrograms();
+    void processEvents(juce::MidiBuffer &midiMessages);
+    void noteOn(int note, int velocity);
 
-  void update();
-  void resetState();
+    // The factory presets.
+    std::vector<DX10Program> _programs;
 
-  void createPrograms();
-  void processEvents(juce::MidiBuffer &midiMessages);
-  void noteOn(int note, int velocity);
+    // Index of the active preset.
+    int _currentProgram;
 
-  // The factory presets.
-  std::vector<DX10Program> _programs;
+    // The current sample rate and 1 / sample rate.
+    float _sampleRate, _inverseSampleRate;
 
-  // Index of the active preset.
-  int _currentProgram;
+    // MIDI note on / note off events for the current block. Each event is
+    // described by 3 values: delta time, note number, velocity.
+    static const int EVENTBUFFER = 120;
+    int _notes[EVENTBUFFER + 8];
 
-  // The current sample rate and 1 / sample rate.
-  float _sampleRate, _inverseSampleRate;
+    // Special event code that marks the end of the MIDI events list.
+    const int EVENTS_DONE = 99999999;
 
-  // MIDI note on / note off events for the current block. Each event is
-  // described by 3 values: delta time, note number, velocity.
-  #define EVENTBUFFER 120
-  int _notes[EVENTBUFFER + 8];
+    // Special "note number" that says this voice is now kept alive by the
+    // sustain pedal being pressed down. As soon as the pedal is released,
+    // this voice will fade out.
+    const int SUSTAIN = 128;
 
-  // Special event code that marks the end of the MIDI events list.
-  #define EVENTS_DONE 99999999
+    // List of the active voices.
+    Voice _voices[NVOICES] = { 0 };
 
-  // Special "note number" that says this voice is now kept alive by the
-  // sustain pedal being pressed down. As soon as the pedal is released,
-  // this voice will fade out.
-  #define SUSTAIN 128
+    // How many voices are currently in use.
+    int _numActiveVoices;
 
-  // List of the active voices.
-  Voice _voices[NVOICES] = { 0 };
+    // The LFO only updates every 100 samples. This counter keeps track of when
+    // the next update is.
+    int _lfoStep;
 
-  // How many voices are currently in use.
-  int _numActiveVoices;
+    // Used by the LFO to approximate a sine wave.
+    float _lfo0, _lfo1;
 
-  // The LFO only updates every 100 samples. This counter keeps track of when
-  // the next update is.
-  int _lfoStep;
+    // Current amount of mod wheel + vibrato modulation. Because the LFO is only
+    // updated every 100 samples, we need to keep track of this across calls to
+    // processBlock().
+    float _modulationAmount;
 
-  // Used by the LFO to approximate a sine wave.
-  float _lfo0, _lfo1;
+    // === Parameter values ===
 
-  // Current amount of mod wheel + vibrato modulation. Because the LFO is only
-  // updated every 100 samples, we need to keep track of this across calls to
-  // processBlock().
-  float _modulationAmount;
+    // Tuning: number of octaves up or down.
+    float _tune;
 
-  // === Parameter values ===
+    // Fine-tuning: between -1.0 and +1.0 semitones (or -100 to +100 cents).
+    float _fineTune;
 
-  // Tuning: number of octaves up or down.
-  float _tune;
+    // Modulator ratio as a multiple of the carrier frequency.
+    float _ratio;
 
-  // Fine-tuning: between -1.0 and +1.0 semitones (or -100 to +100 cents).
-  float _fineTune;
+    // Carrier envelope settings.
+    float _attack, _decay, _release;
 
-  // Modulator ratio as a multiple of the carrier frequency.
-  float _ratio;
+    // Modulator envelope settings.
+    float _modInitialLevel, _modDecay, _modSustain, _modRelease;
 
-  // Carrier envelope settings.
-  float _attack, _decay, _release;
+    // Velocity sensitivity for the modulator envelope (for brightness).
+    float _velocitySensitivity;
 
-  // Modulator envelope settings.
-  float _modInitialLevel, _modDecay, _modSustain, _modRelease;
+    // The amount of vibrato to apply.
+    float _vibrato;
 
-  // Velocity sensitivity for the modulator envelope (for brightness).
-  float _velocitySensitivity;
+    // Amount of waveshaping to add extra harmonics.
+    float _richness;
 
-  // The amount of vibrato to apply.
-  float _vibrato;
+    // How much to mix the modulator waveform into the final sound by itself.
+    // Normally the modulator is only used to change the carrier, but for some
+    // extra snazz you can make the modulator waveform audible as well.
+    float _modMix;
 
-  // Amount of waveshaping to add extra harmonics.
-  float _richness;
+    // Phase increment for the LFO.
+    float _lfoInc;
 
-  // How much to mix the modulator waveform into the final sound by itself.
-  // Normally the modulator is only used to change the carrier, but for some
-  // extra snazz you can make the modulator waveform audible as well.
-  float _modMix;
+    // === MIDI CC values ===
 
-  // Phase increment for the LFO.
-  float _lfoInc;
+    // Status of the damper pedal: 64 = pressed, 0 = released.
+    int _sustain;
 
-  // === MIDI CC values ===
+    // Output gain in linear units. Can be changed by MIDI CC 7.
+    float _volume;
 
-  // Status of the damper pedal: 64 = pressed, 0 = released.
-  int _sustain;
+    // Modulation wheel value. Used to add more vibrato.
+    float _modWheel;
 
-  // Output gain in linear units. Can be changed by MIDI CC 7.
-  float _volume;
+    // Pitch bend value.
+    float _pitchBend;
 
-  // Modulation wheel value. Used to add more vibrato.
-  float _modWheel;
-
-  // Pitch bend value.
-  float _pitchBend;
-
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DX10AudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DX10AudioProcessor)
 };
