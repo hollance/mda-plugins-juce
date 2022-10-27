@@ -2,67 +2,59 @@
 
 #include <JuceHeader.h>
 
-class MDAOverdriveAudioProcessor : public juce::AudioProcessor,
-                                   private juce::ValueTree::Listener
+class MDAOverdriveAudioProcessor : public juce::AudioProcessor
 {
 public:
-  MDAOverdriveAudioProcessor();
-  ~MDAOverdriveAudioProcessor() override;
+    MDAOverdriveAudioProcessor();
+    ~MDAOverdriveAudioProcessor() override;
 
-  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-  void releaseResources() override;
-  void reset() override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void reset() override;
 
-  bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
+    bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-  void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
+    void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
 
-  juce::AudioProcessorEditor *createEditor() override;
-  bool hasEditor() const override { return true; }
+    juce::AudioProcessorEditor *createEditor() override;
+    bool hasEditor() const override { return true; }
 
-  const juce::String getName() const override;
+    const juce::String getName() const override;
 
-  bool acceptsMidi() const override { return false; }
-  bool producesMidi() const override { return false; }
-  bool isMidiEffect() const override { return false; }
-  double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
-  int getNumPrograms() override;
-  int getCurrentProgram() override;
-  void setCurrentProgram(int index) override;
-  const juce::String getProgramName(int index) override;
-  void changeProgramName(int index, const juce::String &newName) override;
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String &newName) override;
 
-  void getStateInformation(juce::MemoryBlock &destData) override;
-  void setStateInformation(const void *data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock &destData) override;
+    void setStateInformation(const void *data, int sizeInBytes) override;
 
-  juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
+    juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
 
 private:
-  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override
-  {
-    _parametersChanged.store(true);
-  }
+    void update();
+    void resetState();
 
-  std::atomic<bool> _parametersChanged { false };
+    // Amount of overdrive, a value between 0 and 1. This controls the mix
+    // between the original signal and the overdriven one.
+    float _drive;
 
-  void update();
-  void resetState();
+    // Filter coefficient, a value between 1 and 0.025.
+    float _filt;
 
-  // Amount of overdrive, a value between 0 and 1. This controls the mix
-  // between the original signal and the overdriven one.
-  float _drive;
+    // Output gain, a value between 0.1 (for -20 dB) and 10 (for +20 dB).
+    float _gain;
 
-  // Filter coefficient, a value between 1 and 0.025.
-  float _filt;
+    // Delay units for the left and right channel filters.
+    float _filtL, _filtR;
 
-  // Output gain, a value between 0.1 (for -20 dB) and 10 (for +20 dB).
-  float _gain;
-
-  // Delay units for the left and right channel filters.
-  float _filtL, _filtR;
-
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MDAOverdriveAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MDAOverdriveAudioProcessor)
 };
