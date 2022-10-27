@@ -55,7 +55,9 @@ This plug-in reduces the bit-depth and sample rate of the input audio (using the
 
 ### Delay
 
-Simple stereo delay with feedback tone control. [Docs](http://mda.smartelectronix.com/vst/help/delay.htm)
+Simple stereo delay with feedback tone control.
+
+[Docs](http://mda.smartelectronix.com/vst/help/delay.htm)
 
 ### DX10
 
@@ -75,15 +77,21 @@ Simple 2-oscillator analog synthesizer. 8 voice polyphonic.
 
 ### Limiter
 
-Opto-electronic style limiter. [Docs](http://mda.smartelectronix.com/vst/help/limiter.htm)
+Opto-electronic style limiter.
+
+[Docs](http://mda.smartelectronix.com/vst/help/limiter.htm)
 
 ### Overdrive
 
-Soft distortion plug-in. [Docs](http://mda.smartelectronix.com/vst/help/overdrive.htm)
+Soft distortion plug-in.
+
+[Docs](http://mda.smartelectronix.com/vst/help/overdrive.htm)
 
 ### Piano
 
-Acoustic piano instrument — this was quite a [popular free piano synth](https://www.kvraudio.com/product/piano-by-mda) back in the day. [Docs](http://mda.smartelectronix.com/vst/help/piano.htm)
+Acoustic piano instrument — this was quite a [popular free piano synth](https://www.kvraudio.com/product/piano-by-mda) back in the day.
+
+[Docs](http://mda.smartelectronix.com/vst/help/piano.htm)
 
 ### RingMod
 
@@ -103,15 +111,21 @@ These continuous tones are actually called "Risset tones", developed from the ea
 
 ### Stereo
 
-Stereo Simulator: Add artificial width to a mono signal. Haas delay and comb filtering. [Docs](http://mda.smartelectronix.com/vst/help/stereo.htm)
+Stereo Simulator: Add artificial width to a mono signal. Haas delay and comb filtering.
+
+[Docs](http://mda.smartelectronix.com/vst/help/stereo.htm)
 
 ### SubSynth
 
-Sub-Bass Synthesizer: Several low frequency enhancement methods. [Docs](http://mda.smartelectronix.com/vst/help/subsynth.htm)
+Sub-Bass Synthesizer: Several low frequency enhancement methods.
+
+[Docs](http://mda.smartelectronix.com/vst/help/subsynth.htm)
 
 ### TestTone
 
-Signal generator with pink and white noise, impulses and sweeps. [Docs](http://mda.smartelectronix.com/vst/help/testtone.htm)
+Signal generator with pink and white noise, impulses and sweeps.
+
+[Docs](http://mda.smartelectronix.com/vst/help/testtone.htm)
 
 Note: the AU version of this plug-in has a bunch of extra features and improvements that I didn't convert yet.
 
