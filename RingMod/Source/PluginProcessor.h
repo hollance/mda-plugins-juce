@@ -2,70 +2,62 @@
 
 #include <JuceHeader.h>
 
-class MDARingModAudioProcessor : public juce::AudioProcessor,
-                                 private juce::ValueTree::Listener
+class MDARingModAudioProcessor : public juce::AudioProcessor
 {
 public:
-  MDARingModAudioProcessor();
-  ~MDARingModAudioProcessor() override;
+    MDARingModAudioProcessor();
+    ~MDARingModAudioProcessor() override;
 
-  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-  void releaseResources() override;
-  void reset() override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void reset() override;
 
-  bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
+    bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-  void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
+    void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
 
-  juce::AudioProcessorEditor *createEditor() override;
-  bool hasEditor() const override { return true; }
+    juce::AudioProcessorEditor *createEditor() override;
+    bool hasEditor() const override { return true; }
 
-  const juce::String getName() const override;
+    const juce::String getName() const override;
 
-  bool acceptsMidi() const override { return false; }
-  bool producesMidi() const override { return false; }
-  bool isMidiEffect() const override { return false; }
-  double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
-  int getNumPrograms() override;
-  int getCurrentProgram() override;
-  void setCurrentProgram(int index) override;
-  const juce::String getProgramName(int index) override;
-  void changeProgramName(int index, const juce::String &newName) override;
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String &newName) override;
 
-  void getStateInformation(juce::MemoryBlock &destData) override;
-  void setStateInformation(const void *data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock &destData) override;
+    void setStateInformation(const void *data, int sizeInBytes) override;
 
-  juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
+    juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
 
 private:
-  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override
-  {
-    _parametersChanged.store(true);
-  }
+    void update();
+    void resetState();
 
-  std::atomic<bool> _parametersChanged { false };
+    // Output level. This was not in the original plug-in, but with a lot of
+    // feedback it's useful to dial back the total volume to prevent clipping.
+    float _level;
 
-  void update();
-  void resetState();
+    // Phase increment for the sine wave.
+    float _phaseInc;
 
-  // Output level. This was not in the original plug-in, but when you add a lot
-  // of feedback, it's useful to dial back the total volume to prevent clipping.
-  float _level;
+    // Amount of feedback to add (value between 0 and 1).
+    float _feedbackAmount;
 
-  // Phase increment for the sine wave.
-  float _phaseInc;
+    // Current phase for the sine wave.
+    float _phase;
 
-  // Amount of feedback to add (value between 0 and 1).
-  float _feedbackAmount;
+    // Previous output values for the left and right channels; used for feedback.
+    float _prevL, _prevR;
 
-  // Current phase for the sine wave.
-  float _phase;
-
-  // Previous output values for the left and right channels; used for feedback.
-  float _prevL, _prevR;
-
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MDARingModAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MDARingModAudioProcessor)
 };
