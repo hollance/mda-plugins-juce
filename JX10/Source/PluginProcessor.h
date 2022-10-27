@@ -2,281 +2,273 @@
 
 #include <JuceHeader.h>
 
-#define NPARAMS 24       // number of parameters
-#define NVOICES 8        // max polyphony
+const int NPARAMS = 24;       // number of parameters
+const int NVOICES = 8;        // max polyphony
 
-#define SILENCE 0.0001f  // voice choking
-#define ANALOG  0.002f   // oscillator drift
+const float SILENCE = 0.0001f;  // voice choking
+const float ANALOG = 0.002f;    // oscillator drift
 
-#define PI    3.1415926535897932f
-#define TWOPI 6.2831853071795864f
+const float PI = 3.1415926535897932f;
+const float TWOPI = 6.2831853071795864f;
 
 // Describes a factory preset.
 struct JX10Program
 {
-  JX10Program();
-  JX10Program(const char *name,
-              float p0,  float p1,  float p2,  float p3,
-              float p4,  float p5,  float p6,  float p7,
-              float p8,  float p9,  float p10, float p11,
-              float p12, float p13, float p14, float p15,
-              float p16, float p17, float p18, float p19,
-              float p20, float p21, float p22, float p23);
-  char name[24];
-  float param[NPARAMS];
+    JX10Program();
+    JX10Program(const char *name,
+                float p0,  float p1,  float p2,  float p3,
+                float p4,  float p5,  float p6,  float p7,
+                float p8,  float p9,  float p10, float p11,
+                float p12, float p13, float p14, float p15,
+                float p16, float p17, float p18, float p19,
+                float p20, float p21, float p22, float p23);
+    char name[24];
+    float param[NPARAMS];
 };
 
 // State for an active voice.
 struct Voice
 {
-  // What note triggered this voice, or SUSTAIN when the key is released
-  // but the sustain pedal is held down. 0 if the voice is inactive.
-  int note;
+    // What note triggered this voice, or SUSTAIN when the key is released
+    // but the sustain pedal is held down. 0 if the voice is inactive.
+    int note;
 
-  // The "period" of the waveform in samples. This is actually only half the
-  // period due to the way the oscillators are implemented: they count up for
-  // `period` samples and then down for `period` samples.
-  float period;   // current period, which may be gliding up to target
-  float target;   // the desired period
+    // The "period" of the waveform in samples. This is actually only half the
+    // period due to the way the oscillators are implemented: they count up for
+    // `period` samples and then down for `period` samples.
+    float period;   // current period, which may be gliding up to target
+    float target;   // the desired period
 
-  // Amount of detuning for osc 2.
-  float detune;
+    // Amount of detuning for osc 2.
+    float detune;
 
-  // Oscillator 1
-  float p1;       // sinc position
-  float pmax1;    // loop length
-  float dp1;      // delta
-  float sin01;    // sine oscillator
-  float sin11;
-  float sinx1;
-  float dc1;      // dc offset
-  float lev1;     // amplitude
+    // Oscillator 1
+    float p1;       // sinc position
+    float pmax1;    // loop length
+    float dp1;      // delta
+    float sin01;    // sine oscillator
+    float sin11;
+    float sinx1;
+    float dc1;      // dc offset
+    float lev1;     // amplitude
 
-  // Oscillator 2
-  float p2;       // sinc position
-  float pmax2;    // loop length
-  float dp2;      // delta
-  float sin02;    // sine oscillator
-  float sin12;
-  float sinx2;
-  float dc2;      // dc offset
-  float lev2;     // amplitude
+    // Oscillator 2
+    float p2;       // sinc position
+    float pmax2;    // loop length
+    float dp2;      // delta
+    float sin02;    // sine oscillator
+    float sin12;
+    float sinx2;
+    float dc2;      // dc offset
+    float lev2;     // amplitude
 
-  // Integrates the outputs from the oscillators to produce a saw wave.
-  float saw;
+    // Integrates the outputs from the oscillators to produce a saw wave.
+    float saw;
 
-  // Low-pass filter cutoff frequency
-  float fc;      // base coefficient
-  float ff;      // modulated filter cutoff
+    // Low-pass filter cutoff frequency
+    float fc;      // base coefficient
+    float ff;      // modulated filter cutoff
 
-  // Filter delay units
-  float f0;      // low-pass output
-  float f1;      // band-pass output
-  float f2;      // x[n - 1]
+    // Filter delay units
+    float f0;      // low-pass output
+    float f1;      // band-pass output
+    float f2;      // x[n - 1]
 
-  // Amplitude envelope
-  float env;     // current envelope level
-  float envd;    // decay multiplier
-  float envl;    // target level
+    // Amplitude envelope
+    float env;     // current envelope level
+    float envd;    // decay multiplier
+    float envl;    // target level
 
-  // Filter envelope
-  float fenv;    // current envelope level
-  float fenvd;   // decay multiplier
-  float fenvl;   // target level
+    // Filter envelope
+    float fenv;    // current envelope level
+    float fenvd;   // decay multiplier
+    float fenvl;   // target level
 };
 
-class JX10AudioProcessor : public juce::AudioProcessor,
-                           private juce::ValueTree::Listener
+class JX10AudioProcessor : public juce::AudioProcessor
 {
 public:
-  JX10AudioProcessor();
-  ~JX10AudioProcessor() override;
+    JX10AudioProcessor();
+    ~JX10AudioProcessor() override;
 
-  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-  void releaseResources() override;
-  void reset() override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void reset() override;
 
-  bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
+    bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-  void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
+    void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
 
-  juce::AudioProcessorEditor *createEditor() override;
-  bool hasEditor() const override { return true; }
+    juce::AudioProcessorEditor *createEditor() override;
+    bool hasEditor() const override { return true; }
 
-  const juce::String getName() const override;
+    const juce::String getName() const override;
 
-  bool acceptsMidi() const override { return true; }
-  bool producesMidi() const override { return false; }
-  bool isMidiEffect() const override { return false; }
-  double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
-  int getNumPrograms() override;
-  int getCurrentProgram() override;
-  void setCurrentProgram(int index) override;
-  const juce::String getProgramName(int index) override;
-  void changeProgramName(int index, const juce::String &newName) override;
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String &newName) override;
 
-  void getStateInformation(juce::MemoryBlock &destData) override;
-  void setStateInformation(const void *data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock &destData) override;
+    void setStateInformation(const void *data, int sizeInBytes) override;
 
-  juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
+    juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
 
 private:
-  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override
-  {
-    _parametersChanged.store(true);
-  }
+    void update();
+    void resetState();
 
-  std::atomic<bool> _parametersChanged { false };
+    void createPrograms();
+    void processEvents(juce::MidiBuffer &midiMessages);
+    void noteOn(int note, int velocity);
 
-  void update();
-  void resetState();
+    // The factory presets.
+    std::vector<JX10Program> _programs;
 
-  void createPrograms();
-  void processEvents(juce::MidiBuffer &midiMessages);
-  void noteOn(int note, int velocity);
+    // Index of the active preset.
+    int _currentProgram;
 
-  // The factory presets.
-  std::vector<JX10Program> _programs;
+    // The current sample rate and 1 / sample rate.
+    float _sampleRate, _inverseSampleRate;
 
-  // Index of the active preset.
-  int _currentProgram;
+    // MIDI note on / note off events for the current block. Each event is
+    // described by 3 values: delta time, note number, velocity.
+    static const int EVENTBUFFER = 120;
+    int _notes[EVENTBUFFER + 8];
 
-  // The current sample rate and 1 / sample rate.
-  float _sampleRate, _inverseSampleRate;
+    // Special event code that marks the end of the MIDI events list.
+    const int EVENTS_DONE = 99999999;
 
-  // MIDI note on / note off events for the current block. Each event is
-  // described by 3 values: delta time, note number, velocity.
-  #define EVENTBUFFER 120
-  int _notes[EVENTBUFFER + 8];
+    // Special "note number" that says this voice is now kept alive by the
+    // sustain pedal being pressed down. As soon as the pedal is released,
+    // this voice will fade out.
+    const int SUSTAIN = -1;
 
-  // Special event code that marks the end of the MIDI events list.
-  #define EVENTS_DONE 99999999
+    // List of the active voices.
+    Voice _voices[NVOICES] = { 0 };
 
-  // Special "note number" that says this voice is now kept alive by the
-  // sustain pedal being pressed down. As soon as the pedal is released,
-  // this voice will fade out.
-  #define SUSTAIN -1
+    // How many voices are currently in use.
+    int _numActiveVoices;
 
-  // List of the active voices.
-  Voice _voices[NVOICES] = { 0 };
+    // Used to smoothen changes in the amount of low-pass filter modulation.
+    float _filterZip;
 
-  // How many voices are currently in use.
-  int _numActiveVoices;
+    // How often we update the LFO, in samples.
+    const int LFO_MAX = 32;
 
-  // Used to smoothen changes in the amount of low-pass filter modulation.
-  float _filterZip;
+    // The LFO only updates every 32 samples. This counter keeps track of when
+    // the next update is.
+    int _lfoStep;
 
-  // How often we update the LFO, in samples.
-  const int LFO_MAX = 32;
+    // Most recent note that was played. Used for gliding.
+    int _lastNote;
 
-  // The LFO only updates every 32 samples. This counter keeps track of when
-  // the next update is.
-  int _lfoStep;
+    // Pseudo random number generator.
+    unsigned int _noiseSeed;
 
-  // Most recent note that was played. Used for gliding.
-  int _lastNote;
+    // === Parameter values ===
 
-  // Pseudo random number generator.
-  unsigned int _noiseSeed;
+    // Mono / poly / glide mode.
+    // 0, 1: POLY
+    //    2: P-LEGATO
+    //    3: P-GLIDE
+    // 4, 5: MONO
+    //    6: M-LEGATO
+    //    7: M-GLIDE
+    int _mode;
 
-  // === Parameter values ===
+    // How much oscillator 2 is mixed into the sound; 0.0 = osc 2 is silent,
+    // 1.0 = osc2 has same level as osc 1. Note that osc 2 is subtracted, so
+    // if it's not detuned from osc 1, they cancel each other out into silence.
+    float _oscMix;
 
-  // Mono / poly / glide mode.
-  // 0, 1: POLY
-  //    2: P-LEGATO
-  //    3: P-GLIDE
-  // 4, 5: MONO
-  //    6: M-LEGATO
-  //    7: M-GLIDE
-  int _mode;
+    // Amount of detuning for oscillator 2. This is a multiplier for the period
+    // of the oscillator.
+    float _detune;
 
-  // How much oscillator 2 is mixed into the sound; 0.0 = osc 2 is silent,
-  // 1.0 = osc2 has same level as osc 1. Note that osc 2 is subtracted, so
-  // if it's not detuned from osc 1, they cancel each other out into silence.
-  float _oscMix;
+    // Master tuning.
+    float _tune;
 
-  // Amount of detuning for oscillator 2. This is a multiplier for the period
-  // of the oscillator.
-  float _detune;
+    // Coefficient for the speed of the glide. 1.0 is instantaneous (no glide).
+    float _glideRate;
 
-  // Master tuning.
-  float _tune;
+    // Number of semitones to glide up or down into any new note. This is used
+    // even if not in a LEGATO or GLIDE mode.
+    float _glideBend;
 
-  // Coefficient for the speed of the glide. 1.0 is instantaneous (no glide).
-  float _glideRate;
+    // Resonance setting for the low-pass filter.
+    float _filterQ;
 
-  // Number of semitones to glide up or down into any new note. This is used
-  // even if not in a LEGATO or GLIDE mode.
-  float _glideBend;
+    // The "VCF Freq" parameter is used to modulate the low-pass filter's cutoff.
+    // The user does not manually set the cutoff frequency; this is determined by
+    // the note's pitch and velocity. It can be modulated by an envelope and LFO,
+    // and also by "VCF Freq". Lower percentages will reduce the cutoff frequency,
+    // higher precentages will raise it.
+    float _filterMultiplier;
 
-  // Resonance setting for the low-pass filter.
-  float _filterQ;
+    // LFO intensity for the filter cutoff.
+    float _filterLFODepth;
 
-  // The "VCF Freq" parameter is used to modulate the low-pass filter's cutoff.
-  // The user does not manually set the cutoff frequency; this is determined by
-  // the note's pitch and velocity. It can be modulated by an envelope and LFO,
-  // and also by "VCF Freq". Lower percentages will reduce the cutoff frequency,
-  // higher precentages will raise it.
-  float _filterMultiplier;
+    // Envelope intensity for the filter cutoff.
+    float _filterEnvDepth;
 
-  // LFO intensity for the filter cutoff.
-  float _filterLFODepth;
+    // Used to set the low-pass filter's cutoff frequency based on the note's
+    // velocity. There is no velocity sensitivity for the amplitude envelope,
+    // only for the filter cutoff. 0 when velocity is disabled.
+    float _velocitySensitivity;
 
-  // Envelope intensity for the filter cutoff.
-  float _filterEnvDepth;
+    // If this is set, velocity sensitivity is completely off and all notes
+    // will be played with the same velocity.
+    bool _ignoreVelocity;
 
-  // Used to set the low-pass filter's cutoff frequency based on the note's
-  // velocity. There is no velocity sensitivity for the amplitude envelope,
-  // only for the filter cutoff. 0 when velocity is disabled.
-  float _velocitySensitivity;
+    // Filter ADSR settings.
+    float _filterAttack, _filterDecay, _filterSustain, _filterRelease;
 
-  // If this is set, velocity sensitivity is completely off and all notes will
-  // be played with the same velocity.
-  bool _ignoreVelocity;
+    // Amplitude ADSR settings.
+    float _envAttack, _envDecay, _envSustain, _envRelease;
 
-  // Filter ADSR settings.
-  float _filterAttack, _filterDecay, _filterSustain, _filterRelease;
+    // Current LFO value and phase increment.
+    float _lfo, _lfoInc;
 
-  // Amplitude ADSR settings.
-  float _envAttack, _envDecay, _envSustain, _envRelease;
+    // Gain for mixing the noise into the output.
+    float _noiseMix;
 
-  // Current LFO value and phase increment.
-  float _lfo, _lfoInc;
+    // Used to keep the output gain constant after changing parameters.
+    float _volumeTrim;
 
-  // Gain for mixing the noise into the output.
-  float _noiseMix;
+    // LFO intensity for vibrato and PWM.
+    float _vibrato, _pwmDepth;
 
-  // Used to keep the output gain constant after changing parameters.
-  float _volumeTrim;
+    // === MIDI CC values ===
 
-  // LFO intensity for vibrato and PWM.
-  float _vibrato, _pwmDepth;
+    // Status of the damper pedal: 64 = pressed, 0 = released.
+    int _sustain;
 
-  // === MIDI CC values ===
+    // Output gain in linear units. Can be changed by MIDI CC 7.
+    float _volume;
 
-  // Status of the damper pedal: 64 = pressed, 0 = released.
-  int _sustain;
+    // Modulation wheel value. Sets the modulation depth for vibrato / PWM.
+    float _modWheel;
 
-  // Output gain in linear units. Can be changed by MIDI CC 7.
-  float _volume;
+    // MIDI CC amount used to modulate the cutoff frequency.
+    float _filterCtl;
 
-  // Modulation wheel value. Sets the modulation depth for vibrato / PWM.
-  float _modWheel;
+    // MIDI CC amount used to modulate the filter Q.
+    float _resonanceCtl;
 
-  // MIDI CC amount used to modulate the cutoff frequency.
-  float _filterCtl;
+    // Amount of channel aftertouch. Used to modulate the filter cutoff.
+    float _pressure;
 
-  // MIDI CC amount used to modulate the filter Q.
-  float _resonanceCtl;
+    // Pitch bend value, and its inverse. Also used to modulate the filter.
+    float _pitchBend, _inversePitchBend;
 
-  // Amount of channel aftertouch. Used to modulate the filter cutoff.
-  float _pressure;
-
-  // Pitch bend value, and its inverse. Also used to modulate the filter.
-  float _pitchBend, _inversePitchBend;
-
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JX10AudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JX10AudioProcessor)
 };
