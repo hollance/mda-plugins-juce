@@ -2,82 +2,74 @@
 
 #include <JuceHeader.h>
 
-class MDAStereoAudioProcessor : public juce::AudioProcessor,
-                                private juce::ValueTree::Listener
+class MDAStereoAudioProcessor : public juce::AudioProcessor
 {
 public:
-  MDAStereoAudioProcessor();
-  ~MDAStereoAudioProcessor() override;
+    MDAStereoAudioProcessor();
+    ~MDAStereoAudioProcessor() override;
 
-  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-  void releaseResources() override;
-  void reset() override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void reset() override;
 
-  bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
+    bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-  void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
+    void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
 
-  juce::AudioProcessorEditor *createEditor() override;
-  bool hasEditor() const override { return true; }
+    juce::AudioProcessorEditor *createEditor() override;
+    bool hasEditor() const override { return true; }
 
-  const juce::String getName() const override;
+    const juce::String getName() const override;
 
-  bool acceptsMidi() const override { return false; }
-  bool producesMidi() const override { return false; }
-  bool isMidiEffect() const override { return false; }
-  double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
-  int getNumPrograms() override;
-  int getCurrentProgram() override;
-  void setCurrentProgram(int index) override;
-  const juce::String getProgramName(int index) override;
-  void changeProgramName(int index, const juce::String &newName) override;
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String &newName) override;
 
-  void getStateInformation(juce::MemoryBlock &destData) override;
-  void setStateInformation(const void *data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock &destData) override;
+    void setStateInformation(const void *data, int sizeInBytes) override;
 
-  juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
+    juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
 
 private:
-  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override
-  {
-    _parametersChanged.store(true);
-  }
+    void update();
+    void resetState();
 
-  std::atomic<bool> _parametersChanged { false };
+    // Used to calculate the release time in milliseconds in the UI.
+    float _sampleRate;
 
-  void update();
-  void resetState();
+    // This buffer stores the delayed samples (mono).
+    std::vector<float> _delayBuffer;
 
-  // Used to calculate the release time in milliseconds in the UI.
-  float _sampleRate;
+    // Maximum length of the delay buffer in samples.
+    int _delayMax;
 
-  // This buffer stores the delayed samples (mono).
-  std::vector<float> _delayBuffer;
+    // Where we will write the next new sample value in the delay buffer.
+    int _writePos;
 
-  // Maximum length of the delay buffer in samples.
-  int _delayMax;
+    // Delay time in samples.
+    float _delayTime;
 
-  // Where we will write the next new sample value in the delay buffer.
-  int _writePos;
+    // Amount of delay modulation (0.0 = off).
+    float _mod;
 
-  // Delay time in samples.
-  float _delayTime;
+    // Current phase and phase increment for the sine wave that is used to
+    // modulate the read position in the delay buffer.
+    float _phase, _phaseInc;
 
-  // Amount of delay modulation (0.0 = off).
-  float _mod;
+    // Filter coefficients for l=left, r=right, i=input, d=delayed sample.
+    float _fli, _fld, _fri, _frd;
 
-  // Current phase and phase increment for the sine wave that is used to
-  // modulate the read position in the delay buffer.
-  float _phase, _phaseInc;
+    // Output level.
+    float _gain;
 
-  // Filter coefficients for l=left, r=right, i=input, d=delayed sample.
-  float _fli, _fld, _fri, _frd;
-
-  // Output level.
-  float _gain;
-
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MDAStereoAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MDAStereoAudioProcessor)
 };
