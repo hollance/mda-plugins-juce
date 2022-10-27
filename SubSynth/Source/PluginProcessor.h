@@ -2,87 +2,79 @@
 
 #include <JuceHeader.h>
 
-class MDASubSynthAudioProcessor : public juce::AudioProcessor,
-                                  private juce::ValueTree::Listener
+class MDASubSynthAudioProcessor : public juce::AudioProcessor
 {
 public:
-  MDASubSynthAudioProcessor();
-  ~MDASubSynthAudioProcessor() override;
+    MDASubSynthAudioProcessor();
+    ~MDASubSynthAudioProcessor() override;
 
-  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-  void releaseResources() override;
-  void reset() override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void reset() override;
 
-  bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
+    bool isBusesLayoutSupported(const BusesLayout &layouts) const override;
 
-  void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
+    void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
 
-  juce::AudioProcessorEditor *createEditor() override;
-  bool hasEditor() const override { return true; }
+    juce::AudioProcessorEditor *createEditor() override;
+    bool hasEditor() const override { return true; }
 
-  const juce::String getName() const override;
+    const juce::String getName() const override;
 
-  bool acceptsMidi() const override { return false; }
-  bool producesMidi() const override { return false; }
-  bool isMidiEffect() const override { return false; }
-  double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
-  int getNumPrograms() override;
-  int getCurrentProgram() override;
-  void setCurrentProgram(int index) override;
-  const juce::String getProgramName(int index) override;
-  void changeProgramName(int index, const juce::String &newName) override;
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String &newName) override;
 
-  void getStateInformation(juce::MemoryBlock &destData) override;
-  void setStateInformation(const void *data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock &destData) override;
+    void setStateInformation(const void *data, int sizeInBytes) override;
 
-  juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
+    juce::AudioProcessorValueTreeState apvts { *this, nullptr, "Parameters", createParameterLayout() };
 
 private:
-  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-  void valueTreePropertyChanged(juce::ValueTree &, const juce::Identifier &) override
-  {
-    _parametersChanged.store(true);
-  }
+    void update();
+    void resetState();
 
-  std::atomic<bool> _parametersChanged { false };
+    // Used to calculate the release time in milliseconds in the UI.
+    float _sampleRate;
 
-  void update();
-  void resetState();
+    // The kind of sub-bass sound to add.
+    int _type;
 
-  // Used to calculate the release time in milliseconds in the UI.
-  float _sampleRate;
+    // Amount of synthesized low-frequency signal to be added.
+    float _wet;
 
-  // The kind of sub-bass sound to add.
-  int _type;
+    // Reduces the level of the original signal.
+    float _dry;
 
-  // Amount of synthesized low-frequency signal to be added.
-  float _wet;
+    // Threshold level. The lower this is, the more intense the effect.
+    float _threshold;
 
-  // Reduces the level of the original signal.
-  float _dry;
+    // Used to find the octave below the input frequency.
+    float _sign, _phase;
 
-  // Threshold level. The lower this is, the more intense the effect.
-  float _threshold;
+    // Oscillator phase and phase increment, for "Key Osc" mode.
+    float _oscPhase, _phaseInc;
 
-  // Used to find the octave below the input frequency.
-  float _sign, _phase;
+    // Current envelope level for the oscillator.
+    float _env;
 
-  // Oscillator phase and phase increment, for "Key Osc" mode.
-  float _oscPhase, _phaseInc;
+    // Decay amount for "Key Osc" mode.
+    float _decay;
 
-  // Current envelope level for the oscillator.
-  float _env;
+    // Low-pass filter coefficients.
+    float _filti, _filto;
 
-  // Decay amount for "Key Osc" mode.
-  float _decay;
+    // Filter delays. We use the same filter four times.
+    float _filt1, _filt2, _filt3, _filt4;
 
-  // Low-pass filter coefficients.
-  float _filti, _filto;
-
-  // Filter delays. We use the same filter four times.
-  float _filt1, _filt2, _filt3, _filt4;
-
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MDASubSynthAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MDASubSynthAudioProcessor)
 };
