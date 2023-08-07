@@ -12,20 +12,18 @@ These source examples are provided mainly for **learning purposes**! As Paul sai
 
 I've tried to fix some of these issues but did not add any new features such as the parameter dezippering. The code here is 20 years old, so it may no longer be the most optimal way to implement these algorithms. Consider this project to be a kind of plug-in archeology. ;-)
 
-That said, it's still **a good place to get started** if you're learning about audio DSP, which is why I added lots of comments to describe what's going on. If you have a [basic understanding of JUCE](https://www.youtube.com/c/TheAudioProgrammer), you should be able to follow along. (See below for tips on getting started.)
+That said, it's still **a good place to get started** if you're learning about audio DSP, which is why I added lots of comments to describe what's going on. If you have a [basic understanding of JUCE](https://www.youtube.com/c/TheAudioProgrammer), you should be able to follow along.
 
 Some notes:
 
 - The code has been cleaned up a bit and documented, and occasionally bug fixed.
 - These plug-ins have no UI and use the default generic JUCE UI.
-- I'm not using the JUCE coding style because it's ugly. ;-)
+- I'm not using the standard JUCE coding style because it's ugly. ;-)
 - The code has only been tested with Xcode on a Mac using JUCE 7, but should work on Windows too.
 
 This source code is licensed under the [MIT license](LICENSE.txt) but keep in mind that JUCE has its own licensing terms. JUCE conversion done by Matthijs Hollemans.
 
-## Included plug-ins
-
-You can find the [original documentation here](http://mda.smartelectronix.com/vst/help/mdaplugs.htm) — if you're not sure how to use a particular plug-in, check there first.
+## Where to start
 
 If you're new to audio programming and want to learn how these plug-ins work, start with one of the following easy plug-ins:
 
@@ -41,29 +39,71 @@ If you're interested in synths, check out:
 - JX10 analog synth
 - DX10 FM synth
 
+## Included plug-ins
+
+You can find an archived copy of the [original documentation here](https://web.archive.org/web/20211028012511/http://mda.smartelectronix.com/vst/help/mdaplugs.htm).
+
+> **Note:** The below documentation of the parameters was taken from the original website but is not always complete or correct.
+
 ### Ambience
 
 Small space reverberator. Designed to simulate a distant mic in small rooms, without the processor overhead of a full reverb plug-in. Can be used to add "softness" to drums and to simulate someone talking "off mic".
 
-[Docs](http://mda.smartelectronix.com/vst/help/ambience.htm)
+| Parameter | Description |
+| --------- | ----------- |
+| Size | Room size (variable from "cardboard box" through "vocal booth" to "medium studio") |
+| HF Damp | Gentle low-pass filter to emulate the high frequency absorption of softer wall surfaces |
+| Mix | Wet / dry mix (affects perceived distance) |
+| Output | Level trim |
 
 ### Degrade
 
 This plug-in reduces the bit-depth and sample rate of the input audio (using the Quantize and Sample Rate parameters) and has some other features for attaining the sound of vintage digital hardware.  The headroom control is a peak clipper, and the Non-Linearity controls add some harmonic distortion to thicken the sound.  Post Filter is a low-pass filter to remove some of the grit introduced by the other controls.
 
-[Docs](http://mda.smartelectronix.com/vst/help/degrade.htm)
+| Parameter | Description |
+| --------- | ----------- |
+| Headroom | Peak clipping threshold |
+| Quantize | Bit depth (typically 8 or below for "telephone" quality) |
+| Sample Rate | Reduced sample rate |
+| Sample Mode | Sample or Hold for different sound characters |
+| Post Filter | Low-pass filter to muffle the distortion produced by the previous controls |
+| Non-Linearity | Additional harmonic distortion "thickening" |
+| Non-Linear Mode | Odd or Even for different sound characters |
+| Output | Level trim |
 
 ### Delay
 
 Simple stereo delay with feedback tone control.
 
-[Docs](http://mda.smartelectronix.com/vst/help/delay.htm)
+| Parameter | Description |
+| --------- | ----------- |
+| Left Delay | Left channel delay time |
+| Right Delay | Right channel delay as a percentage of left channel delay - variable to left, fixed ratios to right |
+| Feedback | Feedback (sum of left and right outputs) |
+| FB Tone | Feedback filtering - low-pass to left, high-pass to right |
+| FX Mix | Wet / dry mix |
+| Output | Level trim |
 
 ### DX10
 
 Simple FM synthesizer. Sounds similar to the later Yamaha DX synths including the heavy bass but with a warmer, cleaner tone.
 
-[Docs](http://mda.smartelectronix.com/vst/help/dx10.htm)
+| Parameter | Description |
+| --------- | ----------- |
+| Attack | Envelope attack time |
+| Decay | Envelope decay time |
+| Release | Envelope release time |
+| Ratio | Modulator frequency (as a multiple of the carrier frequency) |
+| Fine Ratio | Fine control of modulator frequency for detuning and inharmonic effects |
+| Mod Level 1 | Initial modulator level |
+| Mod Decay| Time for modulator level to reach... |
+| Mod Level 2 | Final modulator level |
+| Mod Release | Time for modulator level to reach zero |
+| Vel Sens | Veclocity control of modulator level (brightness) |
+| Vibrato | Vibrato amount (note that heavy vibrato may also cause additional tone modulation effects) |
+| Octave | Octave shift |
+
+The plug-in is 8-voice polyphonic and is designed for high quality (low aliasing) and low processor usage - this means that some features that would increase processor usage have been left out!
 
 ### EPiano
 
@@ -73,31 +113,118 @@ Rhodes Piano. This plug-in is extremely similar to MDA Piano, but uses different
 
 Simple 2-oscillator analog synthesizer. 8 voice polyphonic.
 
-[Docs](http://mda.smartelectronix.com/vst/help/jx10.htm)
+> **TIP!** I cleaned up the code for this synth and [wrote a 350-page book about it](https://leanpub.com/synth-plugin). The book teaches the fundamentals of audio programming by showing you how to build this synth step-by-step.
+
+The plug-in is designed for high quality (lower aliasing than most soft synths) and low processor usage - this means that some features that would increase CPU load have been left out!
+
+Additional patch design by Stefan Andersson and Zeitfraktur, Sascha Kujawa.
+
+Please note that the mda JX10 is not related to the JX series of synths available from JXPlugins.
+
+| Parameter | Description |
+| --------- | ----------- |
+| OSC Mix | Level of second oscillator (both oscillators are sawtooth wave only - but see Vibrato below) |
+| OSC Tune | Tuning of second oscillator in semitones |
+| OSC Fine | Tuning of second oscillator in cents |
+| Glide Mode | POLY = 8-voice polyphonic, P-LEGATO = 8-voice polyphonic with pitch glide if a key is held, P-GLIDE = 8-voice polyphonic with pitch glide, MONO = monophonic, M-LEGATO = monophonic with pitch glide if a key is held, M-GLIDE = monophonic with pitch glide |
+| Glide Rate | Pitch glide rate |
+| Glide Bend | Initial pitch-glide offset, for pitch-envelope effects |
+| VCF Freq | Filter cutoff frequency |
+| VCF Reso | Filter resonance |
+| VCF Env | Cutoff modulation by VCF envelope |
+| VCF LFO | Cutoff modulation by LFO |
+| VCF Vel | Cutoff modulation by velocity (turn fully left to disable velocity control of cutoff and amplitude) |
+| VCF A,D,S,R | Attack, Decay, Sustain, Release envelope for filter cutoff |
+| ENV A,D,S,R | Attack, Decay, Sustain, Release envelope for amplitude |
+| LFO Rate | LFO rate (sine wave only) |
+| Vibrato | LFO modulation of pitch - turn to left for PWM effects |
+| Noise | White noise mix |
+| Octave | Master tuning in octaves |
+| Tuning | Master tuning in cents |
+
+When Vibrato is set to PWM, the two oscillators are phase-locked and will produce a square wave if set to the same pitch. Pitch modulation of one oscillator then causes Pulse Width Modulation (pitch modulation of both oscillators for vibrato is still available from the modulation wheel). Unlike other synths, in PWM mode the oscillators can still be detuned to give a wider range of PWM effects.
+
+| MIDI Control |  |
+| --------- | ----------- |
+| Pitch Bend | +/- 2 semitones |
+| CC1 (Mod Wheel) | Vibrato |
+| Channel Pressure | Filter cutoff modulation by LFO |
+| CC2, CC74 | Increase filter cutoff |
+| CC3 | Decrease filter cutoff |
+| CC7 | Volume |
+| CC16, CC71 | Increase filter resonance |
+| Program Change | 1 - 64 |
 
 ### Limiter
 
 Opto-electronic style limiter.
 
-[Docs](http://mda.smartelectronix.com/vst/help/limiter.htm)
+| Parameter | Description |
+| --------- | ----------- |
+| Thresh | Threshold (this is not a brickwall limiter so this is only approximate) |
+| Output | Level trim |
+| Release |   |
+| Attack |   |
+| Knee | Select Hard or Soft (both can pump and distort when pushed hard - but that could be just what you want!) |
+
+### Loudness
+
+Equal loudness contours for bass EQ and mix correction.
+
+| Parameter | Description |
+| --------- | ----------- |
+| Loudness | Source level relative to listening level (based on a 100 dB SPL maximum level) |
+| Output | Level trim |
+| Link | Automatically adjusts Output to maintain a consistent tonal balance at all levels |
+
+The ear is less sensitive to low frequencies when listening at low volume. This plug-in is based on the Stevens-Davis equal loudness contours and allows the bass level to be adjusted to simulate or correct for this effect.
+
+Example uses:
+
+- If a mix was made with a very low or very high monitoring level, the amount of bass can sound wrong at a normal monitoring level. Use Loudness to adjust the bass content.
+- Check how a mix would sound at a much louder level by decreasing Loudness. (although the non-linear behaviour of the ear at very high levels is not simulated by this plug-in).
+- Fade out without the sound becoming "tinny" by activating Link and using Loudness to adjust the level without affecting the tonal balance.
 
 ### Overdrive
 
 Soft distortion plug-in.
 
-[Docs](http://mda.smartelectronix.com/vst/help/overdrive.htm)
+Possible uses include adding body to drum loops, fuzz guitar, and that 'standing outside a nightclub' sound. This plug does not simulate valve distortion, and any attempt to process organ sounds through it will be extremely unrewarding!
+
+| Parameter | Description |
+| --------- | ----------- |
+| Drive | Amount of distortion |
+| Muffle | Gentle low-pass filter |
+| Output | Level trim |
 
 ### Piano
 
 Acoustic piano instrument — this was quite a [popular free piano synth](https://www.kvraudio.com/product/piano-by-mda) back in the day.
 
-[Docs](http://mda.smartelectronix.com/vst/help/piano.htm)
+Not designed to be the best sounding piano in the world, but boasts extremely low CPU and memory usage.
+
+| Parameter | Description |
+| --------- | ----------- |
+| Decay |  Envelope decay time |
+| Release | Envelope release time |
+| Stereo Width | Key to pan position, with additional stereo ambience at high settings |
+| Tuning | Controls for overall tuning, random tuning amount, and high frequency stretch tuning amount. Use Alt-click to reset sliders to their default positions |
+| Vel Sens | Velocity curve: Mid point is normal "square law" response |
+| Muffle | Gentle low pass filter. Use "V" slider to adjust velocity control |
+| Hardness | Adjusts sample keyranges up or down to change the "size" and brightness of the piano. Use "V" slider to adjust velocity control |
+| Polyphony | Adjustable from monophonic to 32 voices |
 
 ### RingMod
 
 This was the first "mda" effect, made way back in 1998.  It is a simple ring modulator, multiplying the input signal by a sine wave, the frequency of which is set using the Frequency and Fine Tune controls.  As if ring modulation wasn't harsh enough already, the Feedback parameter can add even more edge to the sound!
 
-[Docs](http://mda.smartelectronix.com/vst/help/ringmod.htm)
+Can be used as a high-frequency enhancer for drum sounds (when mixed with the original), adding dissonance to pitched material, and severe tremolo (at low frequency settings).
+
+| Parameter | Description |
+| --------- | ----------- |
+| Freq | Set oscillator frequency in 100Hz steps |
+| Fine | Oscillator frequency fine tune |
+| Feedback | Amount of feedback for "harsh" sound |
 
 ### Shepard
 
@@ -107,27 +234,80 @@ This plug-in generates a continuously rising or falling tone.  Or rather, that's
 
 These continuous tones are actually called "Risset tones", developed from the earlier "Shepard tones" which change in series of discrete steps. The Mode control allows the input signal to be mixed or ring modulated with the tone - this works well as one element of a complex chain of effects.
 
-[Docs](http://mda.smartelectronix.com/vst/help/shepard.htm)
+| Parameter | Description |
+| --------- | ----------- |
+| Mode| TONES = tones only, RING MOD = input ring modulated by tones, TONES+IN = tones mixed with input |
+| Rate | Speed of rising (right) or falling (left) |
+| Output | Level trim |
 
 ### Stereo
 
 Stereo Simulator: Add artificial width to a mono signal. Haas delay and comb filtering.
 
-[Docs](http://mda.smartelectronix.com/vst/help/stereo.htm)
+This plug converts a mono signal to a 'wide' signal using two techniques: Comb filtering where the signal is panned left and right alternately with increasing frequency, and Haas panning where a time delayed signal sounds appears to be at the same level as a quieter non-delayed version.
+
+Comb mode is mono compatible. Haas mode is not, but sounds fine on some signals such as backing vocals. This plug-in must be used in a stereo channel or bus!
+
+| Parameter | Description |
+| --------- | ----------- |
+| Width | Stereo width (turn to right for comb filter mode, left for Haas panning mode) |
+| Delay | Delay time - use higher values for more filter "combs" across the frequency spectrum |
+| Balance | Balance correction for Haas mode |
+| Mod | Amount of delay modulation (defaults to OFF to reduce processor usage) |
+| Rate | Modulation rate (note that modulation completely disappears in mono) |
 
 ### SubSynth
 
-Sub-Bass Synthesizer: Several low frequency enhancement methods.
+Sub-Bass Synthesizer: Several low frequency enhancement methods. More bass than you could ever need!
 
-[Docs](http://mda.smartelectronix.com/vst/help/subsynth.htm)
+Be aware that you may be adding low frequency content outside the range of your monitor speakers.  To avoid clipping, follow with a limiter plug-in (this can also give some giant hip-hop drum sounds!).
+
+| Parameter | Description |
+| --------- | ----------- |
+| Type | see below |
+| Level | Amount of synthesized low frequencysignal to be added |
+| Tune | Maximum frequency - keep as low as possible to reduce distortion. In Key Osc mode sets the oscillator frequency |
+| Dry Mix | Reduces the level of the original signal |
+| Thresh | Increase to "gate" the low frequency effect and stop unwanted background rumbling |
+| Release | Decay time in Key Osc mode |
+
+Type can be:
+
+- **Distort**: Takes the existing low frequencies, clips them to produce harmonics at a constant level, then filters out the higher harmonics. Has a similar effect to compressing the low frequencies.
+
+- **Divide**: As above, but works at an octave below the input frequency, like an octave divider guitar pedal.
+
+- **Invert**: Flips the phase of the low frequency signal once per cycle to add a smooth sub-octave. A simplified version of the classic Sub-Harmonic Synthesizer.
+
+- **Key Osc.**: Adds a decaying "boom" - usually made with an oscillator before a noise gate keyed with the kick drum signal.
 
 ### TestTone
 
 Signal generator with pink and white noise, impulses and sweeps.
 
-[Docs](http://mda.smartelectronix.com/vst/help/testtone.htm)
-
 Note: the AU version of this plug-in has a bunch of extra features and improvements that I didn't convert yet.
+
+| Parameter | Description |
+| --------- | ----------- |
+| Mode | see below |
+| Level | Peak output level |
+| Channel | Generate signals on left or right channel only |
+| F1 | Base frequency (not applicable to pink and white noise or impulses) |
+| F2 | Fine frequency control, or end frequency for sweep modes |
+| Sweep | Sweep duration for sweep modes (2 seconds silence is also added between sweeps). Sets repetition rate in inpulse mode |
+| Thru | Allow the input signal to pass through the plug-in |
+| 0 dB = | Calibrate output so indicated level is relative to, for example -0.01 dB FS or -18 dB FS |
+
+Possible modes:
+
+- MIDI #: sine waves at musical pitches (A3 = 69 = 440 Hz)
+- IMPULSE: single-sample impulse
+- WHITE: white noise
+- PINK: pink noise
+- SINE: ISO 1/3-octave frequencies
+- LOG SWP: logarithmic frequency sweep
+- LOG STEP: 1/3-octave steps
+- LIN SWP: linear frequency sweep
 
 ## Plug-ins that have not been converted yet
 
@@ -143,7 +323,6 @@ Note: the AU version of this plug-in has a bunch of extra features and improveme
 - Image - Stereo image adjustment and M-S matrix
 - Leslie - Rotary speaker simulator
 - Looplex - ?
-- Loudness - Equal loudness contours for bass EQ and mix correction
 - Multiband - Multi-band compressor with M-S processing modes
 - Re-Psycho! - Drum loop pitch changer
 - RezFilter - Resonant filter with LFO and envelope follower
