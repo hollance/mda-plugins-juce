@@ -46,7 +46,7 @@ You can find an archived copy of the [original documentation here](https://web.a
 ## Included plug-ins
 
 - [Ambience](Ambience/): Small space reverberator
-- [Degrade](Degrade/)
+- [Degrade](Degrade/): Low-quality digital sampling
 - [Delay](Delay/): Simple stereo delay with feedback tone control
 - [DX10](DX10/): Simple FM synthesizer
 - [Envelope](Envelope/): Envelope follower and VCA
