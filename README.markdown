@@ -52,6 +52,7 @@ You can find an archived copy of the [original documentation here](https://web.a
 - [Dynamics](Dynamics/): Compressor / Limiter / Gate
 - [Envelope](Envelope/): Envelope follower and VCA
 - [EPiano](EPiano/): Rhodes piano
+- [Image](Image/): Stereo image adjustment and M-S matrix
 - [JX10](JX10/): 2-oscillator analog synthesizer
 - [Limiter](Limiter/): Opto-electronic style limiter
 - [Loudness](Loudness/): Equal loudness contours for bass EQ and mix correction
@@ -73,7 +74,6 @@ You can find an archived copy of the [original documentation here](https://web.a
 - Detune - Simple up/down pitch shifting thickener
 - Dither - Range of dither types including noise shaping
 - DubDelay - Delay with feedback saturation and time/pitch modulation
-- Image - Stereo image adjustment and M-S matrix
 - Leslie - Rotary speaker simulator
 - Looplex - ?
 - Multiband - Multi-band compressor with M-S processing modes
