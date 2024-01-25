@@ -43,19 +43,19 @@ private:
     void update();
     void resetState();
 
-    float sampleRate;
-
     static constexpr int BUFMAX = 4096;
-    float buf[BUFMAX];
-    float win[BUFMAX];
 
-    int buflen;           //buffer length
-    float bufres;           //buffer resolution display
-    float semi;             //detune display
-    int pos0;             //buffer input
-    float pos1, dpos1;      //buffer output, rate
-    float pos2, dpos2;      //downwards shift
-    float wet, dry;         //ouput levels
+    float buf[BUFMAX];  // circular buffer for delay line (mono)
+    float win[BUFMAX];  // crossfade window
+
+    float sampleRate;
+    int buflen;         // delay length
+
+    int pos0;           // write pointer in the circular buffer
+    float pos1, dpos1;  // read pointer and step size for left channel
+    float pos2, dpos2;  // and for right channel
+
+    float wet, dry;     // output levels
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MDADetuneAudioProcessor)
 };

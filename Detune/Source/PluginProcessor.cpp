@@ -1,54 +1,5 @@
 #include "PluginProcessor.h"
 
-
-void protectYourEars(float *buffer, int frameCount) {
-  #ifdef DEBUG
-  bool firstWarning = true;
-  #endif
-  for (int i = 0; i < frameCount; ++i) {
-    float x = buffer[i];
-    bool silence = false;
-    if (std::isnan(x)) {
-      #ifdef DEBUG
-      printf("!!! WARNING: nan detected in audio buffer, silencing !!!\n");
-      #endif
-      silence = true;
-    } else if (std::isinf(x)) {
-      #ifdef DEBUG
-      printf("!!! WARNING: inf detected in audio buffer, silencing !!!\n");
-      #endif
-      silence = true;
-    } else if (x < -2.0f || x > 2.0f) {  // screaming feedback
-      #ifdef DEBUG
-      printf("!!! WARNING: sample out of range (%f), silencing !!!\n", x);
-      #endif
-      silence = true;
-    } else if (x < -1.0f) {
-      #ifdef DEBUG
-      if (firstWarning) {
-        printf("!!! WARNING: sample out of range (%f), clamping !!!\n", x);
-        firstWarning = false;
-      }
-      #endif
-      buffer[i] = -1.0f;
-    } else if (x > 1.0f) {
-      #ifdef DEBUG
-      if (firstWarning) {
-        printf("!!! WARNING: sample out of range (%f), clamping !!!\n", x);
-        firstWarning = false;
-      }
-      #endif
-      buffer[i] = 1.0f;
-    }
-    if (silence) {
-      memset(buffer, 0, frameCount * sizeof(float));
-      return;
-    }
-  }
-}
-
-
-
 MDADetuneAudioProcessor::MDADetuneAudioProcessor()
 : AudioProcessor(BusesProperties()
                  .withInput ("Input",  juce::AudioChannelSet::stereo(), true)
@@ -118,33 +69,49 @@ void MDADetuneAudioProcessor::resetState()
 
 void MDADetuneAudioProcessor::update()
 {
+    // Number of semitones expressed as a value between 0 and 300 cents.
+    // This is skewed using a x^3 curve, putting ~38 cents at the middle
+    // of the slider and 300 cents at the rightmost position.
     float param0 = apvts.getRawParameterValue("Detune")->load();
-    semi = 3.0f * param0 * param0 * param0;
-    dpos2 = std::pow(1.0594631f, semi);  // 2^N/12?
-    dpos1 = 1.0f / dpos2;   // TODO: is downward?
+    float semi = 3.0f * param0 * param0 * param0;
 
-    // Output gain is -20 to +20 dB
+    // 1.0594631^semi is the same as 2^(semi/12) and gives the step size
+    // used to pitch the sound down by this number of semitones.
+    dpos2 = std::pow(1.0594631f, semi);
+
+    // This is the same as 2^(-semi/12) and is the delta used to pitch up
+    // the sound by the given number of semitones.
+    dpos1 = 1.0f / dpos2;
+
+    // Output gain is -20 to +20 dB. Convert decibels to linear.
     float param2 = apvts.getRawParameterValue("Output")->load();
     float gain = juce::Decibels::decibelsToGain(param2);
 
-//TODO: describe these curves
+    // Dry/wet curve of (1 - x^2) for dry and (2x - x^2) for wet, with the
+    // output gain amount already multiplied into it.
     float param1 = apvts.getRawParameterValue("Mix")->load();
     dry = gain - gain * param1 * param1;
     wet = (gain + gain - gain * param1) * param1;
 
+    // The latency parameter determines the length of the delay line.
+    // Since this parameter is a value between 0.0f and 1.0f, the expression
+    // (8 + int(4.9f * param)) produces a discrete set of values: 8, 9, 10, 11,
+    // and 12. The bit shift converts this into buffer lengths of respectively
+    // 256, 512, 1024, 2048, and 4096 samples. Note that `buflen` should always
+    // be a power of two.
     float param3 = apvts.getRawParameterValue("Latency")->load();
     int tmp = 1 << (8 + int(4.9f * param3));
 
-    if (tmp != buflen) {  //recalculate crossfade window
+    // Recalculate the crossfade window (hanning half-overlap-and-add).
+    if (tmp != buflen) {
         buflen = tmp;
         if (buflen > BUFMAX) { buflen = BUFMAX; }
-        bufres = 1000.0f * float(buflen) / sampleRate;
 
-        //hanning half-overlap-and-add
-        double p = 0.0, dp = 6.28318530718/buflen;
+        double phase = 0.0;
+        double step = 6.28318530718 / buflen;
         for (int i = 0; i < buflen; i++) {
-            win[i] = float(0.5 - 0.5 * std::cos(p));
-            p += dp;
+            win[i] = float(0.5 - 0.5 * std::cos(phase));
+            phase += step;
         }
     }
 }
@@ -167,60 +134,120 @@ void MDADetuneAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, juc
     float *out1 = buffer.getWritePointer(0);
     float *out2 = buffer.getWritePointer(1);
 
-    int l = buflen - 1;
-    int lh = buflen >> 1;
-    float lf = float(buflen);
+    /*
+        How this works:
+
+        If you have a delay line where you keep steadily increasing the delay
+        length on every timestep, this will pitch down the sound because it
+        slows down the reading of the waveform. Conversely, if you decrease
+        the delay length by the same amount on every timestep, the sound gets
+        pitched up (it skips parts of the waveform).
+
+        There is a practical problem with this approach: It's not possible to
+        have a delay length smaller than zero and so we can't keep decreasing
+        it forever. Likewise, we can't keep increasing the delay length either
+        as that requires an infinitely long delay line.
+
+        A compromise is to use a short delay length and simply reset the read
+        pointer when it catches up with the write head. The Latency parameter
+        determines the length of the delay, with a minimum of 256 samples and
+        a maximum of 4096 samples. (A shorter delay has less latency but sounds
+        worse.)
+
+        However, resetting the read pointer will produce a nasty discontinuity.
+        The solution is to read from two places at once and crossfade between
+        them. The crossfading is done using a Hann window, which tapers off at
+        the edges, so that the discontinuity is suppressed.
+     */
+
+    // For wrapping around the write pointer in the delay line.
+    // This only works correctly if `buflen` is a power of two!
+    const int mask = buflen - 1;
+
+    // For wrapping around the read pointers, which are floats.
+    const float wrapAround = float(buflen);
+
+    // We'll read the second sample half the delay length ahead.
+    const int halfLength = buflen >> 1;
 
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
+        // Read the input samples.
         float a = in1[i];
         float b = in2[i];
 
+        // Put the dry signal into the output variables already.
         float c = dry * a;
         float d = dry * b;
 
-        --pos0 &= l;
-        buf[pos0] = wet * (a + b);      //input
+        // Update the write position. For some reason this plug-in counts
+        // backwards, but that shouldn't matter. The wrap-around is handled
+        // by bitwise-and with the mask.
+        --pos0 &= mask;
 
+        // Write the input as a mono signal into the delay line. This already
+        // applies the wet gain, so we don't have to do this later.
+        buf[pos0] = wet * (a + b);
+
+        // Update the read position for the left channel, wrapping around
+        // if necessary. Note that this is a float because `dpos1` is the
+        // speed at which to step through the delay line, which will be a
+        // fractional number of samples. (In fact, dpos1 will be less than
+        // 1.0 so that this read index moves slower than the write index,
+        // which results in the sound being pitched down.)
         pos1 -= dpos1;
-        if (pos1 < 0.0f) { pos1 += lf; }          //output
-        int p1i = int(pos1);
-        float p1f = pos1 - float(p1i);
-        a = buf[p1i];
-        ++p1i &= l;
-        a += p1f * (buf[p1i] - a);  //linear interpolation
+        if (pos1 < 0.0f) { pos1 += wrapAround; }
 
-        int p2i = (p1i + lh) & l;           //180-degree ouptut
-        b = buf[p2i];
-        ++p2i &= l;
-        b += p1f * (buf[p2i] - b);  //linear interpolation
+        // Read the delay line using linear interpolation. This involves
+        // taking a weighted average between the sample ahead and behind.
+        int p1i = int(pos1);            // integer position
+        float p1f = pos1 - float(p1i);  // fraction
+        float u = buf[p1i];             // read first sample
+        ++p1i &= mask;                  // move to next sample, maybe wrap
+        u += p1f * (buf[p1i] - u);      // read next sample and blend
 
-        p2i = (p1i - pos0) & l;           //crossfade
-        float x = win[p2i];
-        c += b + x * (a - b);
+        // Also read the sample half the delay length away (i.e. offset by
+        // 180 degrees). This also uses linear interpolation, same fraction.
+        int p2i = (p1i + halfLength) & mask;
+        float v = buf[p2i];
+        ++p2i &= mask;
+        v += p1f * (buf[p2i] - v);
 
-        pos2 -= dpos2;  //repeat for downwards shift - can't see a more efficient way?
-        if (pos2 < 0.0f) { pos2 += lf; }           //output
+        // Crossfade between the two interpolated samples, and add to the
+        // left channel output. The `u` sample is multiplied by the window,
+        // and the `v` sample by (1 - window), so this is another linear
+        // interpolation. The window index is chosen so that the closer the
+        // read pointer gets to the write pointer, the less the `u` sample
+        // and the more `v` sample will contribute, and vice versa.
+        int xi = (p1i - pos0) & mask;
+        c += v + win[xi] * (u - v);
+
+        // Apply the same logic to the right channel. This will pitch up the
+        // sound because `dpos2` is larger than 1.0, so that this read index
+        // will move faster than the write index and shorten the waveform.
+        pos2 -= dpos2;
+        if (pos2 < 0.0f) { pos2 += wrapAround; }
+
+        // First sample.
         p1i = int(pos2);
         p1f = pos2 - float(p1i);
-        a = buf[p1i];
-        ++p1i &= l;
-        a += p1f * (buf[p1i] - a);  //linear interpolation
+        u = buf[p1i];
+        ++p1i &= mask;
+        u += p1f * (buf[p1i] - u);
 
-        p2i = (p1i + lh) & l;           //180-degree ouptut
-        b = buf[p2i];
-        ++p2i &= l;
-        b += p1f * (buf[p2i] - b);  //linear interpolation
+        // Second sample offset by half delay length.
+        p2i = (p1i + halfLength) & mask;
+        v = buf[p2i];
+        ++p2i &= mask;
+        v += p1f * (buf[p2i] - v);
 
-        p2i = (p1i - pos0) & l;           //crossfade
-        x = win[p2i];
-        d += b + x * (a - b);
+        // Crossfade.
+        p2i = (p1i - pos0) & mask;
+        d += v + win[p2i] * (u - v);
 
+        // Write the output samples.
         out1[i] = c;
         out2[i] = d;
     }
-
-    protectYourEars(out1, buffer.getNumSamples());
-    protectYourEars(out2, buffer.getNumSamples());
 }
 
 juce::AudioProcessorEditor *MDADetuneAudioProcessor::createEditor()
@@ -267,7 +294,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MDADetuneAudioProcessor::cre
             .withLabel("%")
             .withStringFromValueFunction([](float value, int)
             {
-                return juce::String(int(99.0f * value));
+                return juce::String(int(100.0f * value));
             })));
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
@@ -286,6 +313,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout MDADetuneAudioProcessor::cre
             .withLabel("ms")
             .withStringFromValueFunction([this](float value, int)
             {
+                // Calculate the length of the delay in samples, then convert
+                // this to a time in milliseconds for displaying to the user.
                 int buflen = 1 << (8 + int(4.9f * value));
                 if (buflen > BUFMAX) { buflen = BUFMAX; }
                 float bufres = 1000.0f * float(buflen) / sampleRate;
