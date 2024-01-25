@@ -48,6 +48,7 @@ You can find an archived copy of the [original documentation here](https://web.a
 - [Ambience](Ambience/): Small space reverberator
 - [Degrade](Degrade/): Low-quality digital sampling
 - [Delay](Delay/): Simple stereo delay with feedback tone control
+- [Detune](Detune/): Simple up/down pitch shifting thickener
 - [DX10](DX10/): Simple FM synthesizer
 - [Dynamics](Dynamics/): Compressor / Limiter / Gate
 - [Envelope](Envelope/): Envelope follower and VCA
@@ -71,7 +72,6 @@ You can find an archived copy of the [original documentation here](https://web.a
 - BeatBox - Drum replacer
 - Combo - Amp & speaker simulator
 - De-ess - High frequency dynamics processor
-- Detune - Simple up/down pitch shifting thickener
 - Dither - Range of dither types including noise shaping
 - DubDelay - Delay with feedback saturation and time/pitch modulation
 - Leslie - Rotary speaker simulator
