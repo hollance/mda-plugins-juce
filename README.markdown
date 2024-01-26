@@ -10,7 +10,7 @@ These source examples are provided mainly for **learning purposes**! As Paul sai
 
 > This code is definitely not an example of how to write plug-ins! It's obvious that I didn't know much C++ when I started, and some of the optimizations might have worked on a 486 processor but are not relevant today.  The code is very raw with no niceties like parameter de-zipping, but maybe you'll find some useful stuff in there.
 
-I've tried to fix some of these issues but did not add any new features such as the parameter dezippering. The code here is 20 years old, so it may no longer be the most optimal way to implement these algorithms. Consider this project to be a kind of plug-in archeology. ;-)
+I've tried to fix some of these issues but did not add any new features such as parameter dezippering. The code here is 20 years old, so it may no longer be the most optimal way to implement these algorithms. Consider this project to be a kind of [plug-in archeology](https://audiodev.blog/plugin-archeology/). ;-)
 
 That said, it's still **a good place to get started** if you're learning about audio DSP, which is why I added lots of comments to describe what's going on. If you have a [basic understanding of JUCE](https://www.youtube.com/c/TheAudioProgrammer), you should be able to follow along.
 

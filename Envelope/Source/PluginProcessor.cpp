@@ -146,7 +146,7 @@ void MDAEnvelopeAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, j
 
             out1[i] = x;           // audio on left channel
             out2[i] = 0.5f * env;  // envelope on right channel
-	    }
+        }
     } else {  // VCA mode
         for (int i = 0; i < buffer.getNumSamples(); ++i) {
             float a = in1[i];
