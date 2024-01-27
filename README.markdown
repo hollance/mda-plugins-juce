@@ -46,6 +46,7 @@ You can find an archived copy of the [original documentation here](https://web.a
 ## Included plug-ins
 
 - [Ambience](Ambience/): Small space reverberator
+- [Bandisto](Bandisto/): Multi-band distortion
 - [Degrade](Degrade/): Low-quality digital sampling
 - [Delay](Delay/): Simple stereo delay with feedback tone control
 - [Detune](Detune/): Simple up/down pitch shifting thickener
@@ -68,7 +69,6 @@ You can find an archived copy of the [original documentation here](https://web.a
 
 ## Plug-ins that have not been converted yet
 
-- Bandisto - Multi-band distortion
 - BeatBox - Drum replacer
 - Combo - Amp & speaker simulator
 - De-ess - High frequency dynamics processor
