@@ -64,6 +64,7 @@ You can find an archived copy of the [original documentation here](https://web.a
 - [RezFilter](RezFilter/): Resonant filter with LFO and envelope follower
 - [RingMod](RingMod/): Simple ring modulator
 - [Shepard](Shepard/): Shepard tone generator
+- [Splitter](Splitter/): Frequency / level crossover for setting up dynamic processing
 - [Stereo](Stereo/): Add artificial width to a mono signal
 - [SubSynth](SubSynth/): Several low frequency enhancement methods
 - [TestTone](TestTone/): Signal generator with pink and white noise, impulses and sweeps
@@ -80,7 +81,6 @@ You can find an archived copy of the [original documentation here](https://web.a
 - Re-Psycho! - Drum loop pitch changer
 - Round Panner - 3D panner
 - SpecMeter
-- Splitter - Frequency / level crossover for setting up dynamic processing
 - Talkbox - High resolution vocoder
 - Thru-Zero Flanger - Classic tape-flanging simulation
 - Tracker - Pitch tracking oscillator, or pitch tracking EQ
