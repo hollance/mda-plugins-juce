@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<JUCERPROJECT id="hJLT3v" name="MDAEPiano" projectType="audioplug" useAppConfig="0"
+<JUCERPROJECT id="hJLT3v" name="mdaEPiano" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
-              pluginCharacteristicsValue="pluginIsSynth,pluginWantsMidiIn">
-  <MAINGROUP id="InRKBo" name="MDAEPiano">
+              pluginCharacteristicsValue="pluginIsSynth,pluginWantsMidiIn"
+              version="1.1.0" companyWebsite="audiodev.blog" bundleIdentifier="blog.audiodev.mdaepiano"
+              pluginManufacturer="audiodev.blog" pluginManufacturerCode="Dvbl"
+              pluginCode="mdEP">
+  <MAINGROUP id="InRKBo" name="mdaEPiano">
     <GROUP id="{F0B11119-5176-3E3E-921F-E27807A1C03E}" name="Source">
       <FILE id="lstsGX" name="mdaEPianoData.h" compile="0" resource="0" file="Source/mdaEPianoData.h"/>
       <FILE id="KceLqQ" name="PluginProcessor.cpp" compile="1" resource="0"
@@ -16,8 +19,8 @@
   <EXPORTFORMATS>
     <XCODE_MAC targetFolder="Builds/MacOSX">
       <CONFIGURATIONS>
-        <CONFIGURATION isDebug="1" name="Debug" targetName="MDAEPiano"/>
-        <CONFIGURATION isDebug="0" name="Release" targetName="MDAEPiano"/>
+        <CONFIGURATION isDebug="1" name="Debug" targetName="mdaEPiano"/>
+        <CONFIGURATION isDebug="0" name="Release" targetName="mdaEPiano" customXcodeFlags="GCC_GENERATE_DEBUGGING_SYMBOLS=YES, DEBUG_INFORMATION_FORMAT=dwarf-with-dsym"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_audio_basics" path="../../../../../JUCE/modules"/>
