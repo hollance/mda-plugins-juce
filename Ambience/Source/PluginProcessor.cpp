@@ -236,6 +236,12 @@ void MDAAmbienceAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, j
 
     _pos = p;
     _filter = f;
+
+    // N.B. The original code had denormal handling on `f` here that also resets
+    // the contents of the delay lines. That could interrupt the reverb tail if
+    // the input signal stops playing but the reverb was still ringing. It would
+    // have made more sense to put that denormal handling on the outputs of the
+    // all-pass filter sections. But we use juce::ScopedNoDenormals instead. :-)
 }
 
 juce::AudioProcessorEditor *MDAAmbienceAudioProcessor::createEditor()
