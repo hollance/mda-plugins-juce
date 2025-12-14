@@ -87,6 +87,7 @@ void MDAAmbienceAudioProcessor::update()
     _feedback = 0.8f;
 
     // Convert the percentage to a filter coefficient between 0.05 - 0.95.
+    // The higher HF Damp, the *less* filtering!
     float fParam1 = apvts.getRawParameterValue("HF Damp")->load() / 100.0f;
     _damp = 0.05f + 0.9f * fParam1;
 
@@ -156,9 +157,9 @@ void MDAAmbienceAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, j
         float b = in2[i];
 
         // Combine the left and right stereo inputs into a single mono value.
-        // (This actually adds a +6 dB boost, which may be undesirable.)
         // Also multiply by the wetness amount. We can do this here already
-        // because everything that follows are linear operations.
+        // because everything that follows are linear operations. Note that
+        // the maximum value of wet is 0.8, not 1.0.
         float x = wet * (a + b);
 
         // HF damping. This is a simple low-pass filter: f = a*x + (1 - a)*f.
@@ -171,15 +172,17 @@ void MDAAmbienceAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, j
 
           Each of these allpass stages does the following:
 
-                     ^-----------------------+
-                     |                       |
-                     |                       v
+                          ^-----------------------+
+                          |                       |
+                          |                       v
               r ---> + --------> delay ---------> + ---> new r
-                           ^                      |
-                           |                      |
-                           <---- *(-feedback) ----v
+                     ^                      |
+                     |                      |
+                     <---- *(-feedback) ----v
 
-          This is a typical allpass filter design. The feedback is always 0.8.
+          The feedback gain is always 0.8. In a typical Schroeder allpass,
+          feedforward gain is equal to the feedback gain (and positive) but
+          here it is always 1.0!
          */
 
         // First allpass stage.
@@ -200,10 +203,11 @@ void MDAAmbienceAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, j
         _buf3[d3] = r;
         r += t;
 
-        // The left output is a mix of the dry input with the allpass-filtered
-        // signal. The original low-pass filtered signal is subtracted.
-        // Not sure why the LPF value gets subtracted but that is what makes
-        // this effect work; I'll need to read up on reverbs, I guess. ;-)
+        // The left channel output is a mix of the dry input with the allpass
+        // filtered signal. We want the wet output to be a diffuse version of
+        // the input, but the very first thing coming out of the delay lines
+        // is `f`, the low-pass filtered input. We don't want a copy of the dry
+        // signal in the wet signal, which is why `f` gets subtracted here.
         a = dry * a + r - f;
 
         // Fourth allpass stage.
@@ -212,7 +216,11 @@ void MDAAmbienceAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, j
         _buf4[d4] = r;
         r += t;
 
-        // The right channel output.
+        // The right channel output. This has one more delay stage than the
+        // left channel, making the reverb tail a bit longer on the right.
+        // You can clearly hear this on headphones; it's a little weird.
+        // The reverb sounds mono until the left channel fades out and the
+        // right keeps playing.
         b = dry * b + r - f;
 
         // Advance the read and write indices for the delay lines, wrap if needed.
@@ -227,14 +235,7 @@ void MDAAmbienceAudioProcessor::processBlock(juce::AudioBuffer<float> &buffer, j
     }
 
     _pos = p;
-
-    // Catch denormals
-    if (std::abs(f) > 1.0e-10f) {
-        _filter = f;
-    } else {
-        _filter = 0.0f;
-        flushBuffers();
-    }
+    _filter = f;
 }
 
 juce::AudioProcessorEditor *MDAAmbienceAudioProcessor::createEditor()
